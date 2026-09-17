@@ -15,7 +15,14 @@ import {
   Tractor,
 } from 'lucide-react';
 import { ProdutorRural, SolicitacaoServico, StatusServico, TIPOS_SERVICOS_DISPONIVEIS } from '../types';
-import { STATUS_CONFIG, LISTA_STATUS, verificarPendenciaProdutor, formatarDataBR, formatarMoeda } from '../utils/storage';
+import {
+  STATUS_CONFIG,
+  LISTA_STATUS,
+  verificarPendenciaProdutor,
+  formatarDataBR,
+  formatarMoeda,
+  getHojeStr,
+} from '../utils/storage';
 
 interface CalendarViewProps {
   produtores: ProdutorRural[];
@@ -34,13 +41,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onAddServico,
   onOpenReminders,
 }) => {
-  // Inicializa no mês da data atual (Setembro de 2026)
-  const hoje = new Date();
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 8, 14)); // 14/09/2026
+  // Data de hoje dinâmica baseada no sistema do usuário
+  const hojeStr = getHojeStr();
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
   const [statusFiltro, setStatusFiltro] = useState<string>('todos');
   const [tipoServicoFiltro, setTipoServicoFiltro] = useState<string>('todos');
   const [filtroTexto, setFiltroTexto] = useState<string>('');
-  const [diaSelecionado, setDiaSelecionado] = useState<string | null>('2026-09-14');
+  const [diaSelecionado, setDiaSelecionado] = useState<string | null>(() => getHojeStr());
 
   // Mapa rápido de produtores por ID
   const produtoresMap = useMemo(() => {
@@ -59,9 +66,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   };
 
   const handleIrParaHoje = () => {
-    const d = new Date(2026, 8, 14); // sincronizado com a data base
-    setCurrentDate(d);
-    setDiaSelecionado('2026-09-14');
+    setCurrentDate(new Date());
+    setDiaSelecionado(getHojeStr());
   };
 
   // Montagem da grade do calendário
@@ -170,7 +176,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   }, [diaSelecionado, servicosPorData]);
 
   // Contagem de hoje
-  const hojeStr = '2026-09-14';
   const totalHoje = servicos.filter((s) => s.dataPrevista === hojeStr && s.status !== 'cancelada').length;
 
   return (
@@ -244,11 +249,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             <button
               onClick={handleIrParaHoje}
               className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors shrink-0"
-              title="Ir para a data de hoje (14/09)"
+              title="Ir para a data de hoje"
             >
               <CalendarIcon className="w-3.5 h-3.5 text-emerald-700" />
-              <span className="hidden sm:inline">Hoje</span>
-              <span className="sm:hidden text-[11px]">14/09</span>
+              <span>Hoje</span>
             </button>
           </div>
 

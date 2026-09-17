@@ -371,3 +371,27 @@ export function normalizarTexto(txt: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .trim();
 }
+
+/**
+ * Retorna a data atual real no formato YYYY-MM-DD
+ */
+export function getHojeStr(): string {
+  const d = new Date();
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+
+/**
+ * Retorna o dia de amanhã no formato YYYY-MM-DD
+ */
+export function getAmanhaStr(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+

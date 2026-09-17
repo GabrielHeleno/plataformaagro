@@ -102,99 +102,108 @@ export const PRODUTORES_INICIAIS: ProdutorRural[] = [
   },
 ];
 
-// Serviços programados com datas ao redor de setembro de 2026 (mês atual)
+function dataRelativa(dias: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + dias);
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+
+// Serviços programados com datas relativas à data de hoje real
 export const SERVICOS_INICIAIS: SolicitacaoServico[] = [
   {
     id: 'SRV-101',
     produtorId: 'PR-001', // Zé do Milho
-    dataPrevista: '2026-09-14', // Hoje!
+    dataPrevista: dataRelativa(0), // Hoje!
     horaPrevista: '08:30',
     tipoServico: 'Arado',
     descricao: 'Arado profundo com trator agrícola para revolvimento e aeração de solo no talhão 3.',
     status: 'agendada',
     observacoes: 'Condições de umidade do solo ideais para a operação.',
     valor: 4800,
-    dataCriacao: '2026-09-08',
+    dataCriacao: dataRelativa(-6),
   },
   {
     id: 'SRV-102',
     produtorId: 'PR-002', // Chico da Esperança (com pendência!)
-    dataPrevista: '2026-09-14', // Hoje!
+    dataPrevista: dataRelativa(0), // Hoje!
     horaPrevista: '14:00',
     tipoServico: 'Grade Aradora',
     descricao: 'Operação com grade aradora pesada para incorporação de restos culturais.',
     status: 'sem pagamento confirmado',
     observacoes: 'Serviço executado preliminarmente mas fatura anterior em atraso.',
     valor: 6500,
-    dataCriacao: '2026-09-02',
+    dataCriacao: dataRelativa(-12),
   },
   {
     id: 'SRV-103',
     produtorId: 'PR-003', // Dona Paula do Café
-    dataPrevista: '2026-09-15', // Amanhã
+    dataPrevista: dataRelativa(1), // Amanhã
     horaPrevista: '09:00',
     tipoServico: 'Sulcador',
     descricao: 'Abertura de sulcos alinhados e dosagem uniforme para novas mudas.',
     status: 'agendada',
     observacoes: 'Espaçamento de 3,5 metros entre linhas.',
     valor: 2200,
-    dataCriacao: '2026-09-10',
+    dataCriacao: dataRelativa(-4),
   },
   {
     id: 'SRV-104',
     produtorId: 'PR-004', // Manoel do Trator
-    dataPrevista: '2026-09-16',
+    dataPrevista: dataRelativa(2),
     horaPrevista: '07:00',
     tipoServico: 'Grade Leve',
     descricao: 'Passagem de grade niveladora leve para destorroamento e acabamento da cama de plantio.',
     status: 'agendada',
     observacoes: 'Área com 60 hectares pronta para o início do plantio.',
     valor: 18500,
-    dataCriacao: '2026-09-09',
+    dataCriacao: dataRelativa(-5),
   },
   {
     id: 'SRV-105',
     produtorId: 'PR-002', // Chico da Esperança
-    dataPrevista: '2026-09-05',
+    dataPrevista: dataRelativa(-9),
     horaPrevista: '10:00',
     tipoServico: 'Ensiladeira',
     descricao: 'Corte mecanizado e trituração de milho e capiaçu para ensilagem.',
     status: 'cobrança realizada',
-    observacoes: 'Boleto bancário emitido com vencimento em 10/09/2026. Pagamento ainda não compensado.',
+    observacoes: 'Boleto bancário emitido com vencimento recente. Pagamento ainda não compensado.',
     valor: 12400,
-    dataCriacao: '2026-08-25',
-    dataConclusao: '2026-09-05',
+    dataCriacao: dataRelativa(-20),
+    dataConclusao: dataRelativa(-9),
   },
   {
     id: 'SRV-106',
     produtorId: 'PR-001', // Zé do Milho
-    dataPrevista: '2026-09-01',
+    dataPrevista: dataRelativa(-13),
     horaPrevista: '11:00',
     tipoServico: 'Roçadeira',
     descricao: 'Roçagem mecânica de aceiros perimetrais e controle de vegetação invasora.',
     status: 'pago',
     observacoes: 'Pagamento via PIX confirmado no mesmo dia.',
-    valor: 3900.50,
+    valor: 3900.5,
     tempoServico: '4 horas',
-    dataCriacao: '2026-08-20',
-    dataConclusao: '2026-09-01',
+    dataCriacao: dataRelativa(-25),
+    dataConclusao: dataRelativa(-13),
   },
   {
     id: 'SRV-107',
     produtorId: 'PR-005', // Mendes da Fazenda
-    dataPrevista: '2026-09-18',
+    dataPrevista: dataRelativa(4),
     horaPrevista: '13:30',
     tipoServico: 'Carroça (Silagem)',
     descricao: 'Transporte de silagem verde da lavoura até o silo trincheira de confinamento.',
     status: 'agendada',
     observacoes: 'Carreta acoplada de alta capacidade.',
     valor: 2850.75,
-    dataCriacao: '2026-09-11',
+    dataCriacao: dataRelativa(-3),
   },
   {
     id: 'SRV-108',
     produtorId: 'PR-005', // Mendes da Fazenda
-    dataPrevista: '2026-09-08',
+    dataPrevista: dataRelativa(-6),
     horaPrevista: '15:00',
     tipoServico: 'Trator (corrente para arrasto)',
     descricao: 'Operação de arrasto de troncos e limpeza pesada de terreno com trator e corrente.',
@@ -202,13 +211,13 @@ export const SERVICOS_INICIAIS: SolicitacaoServico[] = [
     observacoes: 'Serviço concluído com sucesso. Aguardando emissão da fatura fiscal.',
     valor: 4500,
     tempoServico: '5h 30min',
-    dataCriacao: '2026-08-30',
-    dataConclusao: '2026-09-08',
+    dataCriacao: dataRelativa(-15),
+    dataConclusao: dataRelativa(-6),
   },
   {
     id: 'SRV-109',
     produtorId: 'PR-003', // Dona Paula do Café
-    dataPrevista: '2026-08-28',
+    dataPrevista: dataRelativa(-17),
     horaPrevista: '08:00',
     tipoServico: 'Carroça (lenha)',
     descricao: 'Transporte de toretes de lenha de eucalipto para alimentação da caldeira.',
@@ -216,33 +225,33 @@ export const SERVICOS_INICIAIS: SolicitacaoServico[] = [
     observacoes: 'Quitação efetuada por transferência bancária.',
     valor: 5200,
     tempoServico: '6 horas',
-    dataCriacao: '2026-08-15',
-    dataConclusao: '2026-08-28',
+    dataCriacao: dataRelativa(-30),
+    dataConclusao: dataRelativa(-17),
   },
   {
     id: 'SRV-110',
     produtorId: 'PR-004', // Manoel do Trator
-    dataPrevista: '2026-09-12',
+    dataPrevista: dataRelativa(-2),
     horaPrevista: '16:00',
     tipoServico: 'Batedor de Cereais (Milho)',
     descricao: 'Trilha e debulha de espigas de milho com batedor acoplado ao trator.',
     status: 'realizada',
     observacoes: 'Operação concluída com pureza de grãos certificada.',
-    valor: 3125.80,
+    valor: 3125.8,
     tempoServico: '3h 45min',
-    dataCriacao: '2026-09-05',
-    dataConclusao: '2026-09-12',
+    dataCriacao: dataRelativa(-9),
+    dataConclusao: dataRelativa(-2),
   },
   {
     id: 'SRV-111',
     produtorId: 'PR-001', // Zé do Milho
-    dataPrevista: '2026-09-24',
+    dataPrevista: dataRelativa(7),
     horaPrevista: '10:00',
     tipoServico: 'Batedor de Cereais (Feijão)',
     descricao: 'Bateção, limpeza e separação de palha para lote de feijão colhido.',
     status: 'agendada',
     observacoes: 'Ensacamento no local.',
     valor: 1500,
-    dataCriacao: '2026-09-12',
-  }
+    dataCriacao: dataRelativa(-1),
+  },
 ];

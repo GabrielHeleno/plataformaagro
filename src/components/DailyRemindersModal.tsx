@@ -19,7 +19,14 @@ import {
   dispararLembreteDiario,
   getNotificationPermission,
 } from '../utils/notifications';
-import { STATUS_CONFIG, LISTA_STATUS, verificarPendenciaProdutor, formatarDataBR } from '../utils/storage';
+import {
+  STATUS_CONFIG,
+  LISTA_STATUS,
+  verificarPendenciaProdutor,
+  formatarDataBR,
+  getHojeStr,
+  getAmanhaStr,
+} from '../utils/storage';
 
 interface DailyRemindersModalProps {
   produtores: ProdutorRural[];
@@ -44,8 +51,8 @@ export const DailyRemindersModal: React.FC<DailyRemindersModalProps> = ({
   const [filtroStatus, setFiltroStatus] = useState<string>('todos');
   const [msgAlerta, setMsgAlerta] = useState<string | null>(null);
 
-  const hojeStr = '2026-09-14';
-  const amanhaStr = '2026-09-15';
+  const hojeStr = getHojeStr();
+  const amanhaStr = getAmanhaStr();
   const dataAtiva = dataAba === 'hoje' ? hojeStr : amanhaStr;
 
   const produtoresMap = new Map<string, ProdutorRural>();
@@ -168,7 +175,7 @@ export const DailyRemindersModal: React.FC<DailyRemindersModalProps> = ({
                   : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
               }`}
             >
-              Hoje (14/09) · {servicos.filter((s) => s.dataPrevista === hojeStr).length}
+              Hoje ({formatarDataBR(hojeStr).slice(0, 5)}) · {servicos.filter((s) => s.dataPrevista === hojeStr).length}
             </button>
             <button
               onClick={() => setDataAba('amanha')}
@@ -178,7 +185,7 @@ export const DailyRemindersModal: React.FC<DailyRemindersModalProps> = ({
                   : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
               }`}
             >
-              Amanhã (15/09) · {servicos.filter((s) => s.dataPrevista === amanhaStr).length}
+              Amanhã ({formatarDataBR(amanhaStr).slice(0, 5)}) · {servicos.filter((s) => s.dataPrevista === amanhaStr).length}
             </button>
           </div>
 

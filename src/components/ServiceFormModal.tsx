@@ -11,7 +11,7 @@ import {
   User,
 } from 'lucide-react';
 import { SolicitacaoServico, StatusServico, ProdutorRural, TIPOS_SERVICOS_DISPONIVEIS } from '../types';
-import { STATUS_CONFIG, LISTA_STATUS } from '../utils/storage';
+import { STATUS_CONFIG, LISTA_STATUS, getHojeStr, getAmanhaStr, formatarDataBR } from '../utils/storage';
 
 interface ServiceFormModalProps {
   servicoInicial?: SolicitacaoServico | null;
@@ -39,7 +39,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
     servicoInicial?.produtorId || produtorIdFixo || (produtores[0]?.id || '')
   );
   const [dataPrevista, setDataPrevista] = useState<string>(
-    servicoInicial?.dataPrevista || dataInicial || '2026-09-14'
+    servicoInicial?.dataPrevista || dataInicial || getHojeStr()
   );
   const [horaPrevista, setHoraPrevista] = useState<string>(servicoInicial?.horaPrevista || '08:00');
   const [tipoServico, setTipoServico] = useState<string>(
@@ -49,7 +49,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
   const [status, setStatus] = useState<StatusServico>(servicoInicial?.status || 'agendada');
   const [tempoServico, setTempoServico] = useState<string>(servicoInicial?.tempoServico || '');
   const [dataConclusao, setDataConclusao] = useState<string>(
-    servicoInicial?.dataConclusao || (servicoInicial?.dataPrevista || dataInicial || '2026-09-14')
+    servicoInicial?.dataConclusao || (servicoInicial?.dataPrevista || dataInicial || getHojeStr())
   );
   const [observacoes, setObservacoes] = useState<string>(servicoInicial?.observacoes || '');
   const [valor, setValor] = useState<string>(
@@ -190,18 +190,18 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                 <div className="flex items-center gap-1 text-[11px]">
                   <button
                     type="button"
-                    onClick={() => setDataPrevista('2026-09-14')}
+                    onClick={() => setDataPrevista(getHojeStr())}
                     className="text-emerald-700 hover:underline font-semibold"
                   >
-                    Hoje (14/09)
+                    Hoje ({formatarDataBR(getHojeStr()).slice(0, 5)})
                   </button>
                   <span>•</span>
                   <button
                     type="button"
-                    onClick={() => setDataPrevista('2026-09-15')}
+                    onClick={() => setDataPrevista(getAmanhaStr())}
                     className="text-emerald-700 hover:underline font-semibold"
                   >
-                    Amanhã (15/09)
+                    Amanhã ({formatarDataBR(getAmanhaStr()).slice(0, 5)})
                   </button>
                 </div>
               </div>

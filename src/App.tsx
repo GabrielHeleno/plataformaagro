@@ -17,6 +17,7 @@ import {
   loadFromIndexedDB,
   verificarPendenciaProdutor,
   resetToDefaults,
+  getHojeStr,
 } from './utils/storage';
 import {
   getNotificationPermission,
@@ -81,9 +82,9 @@ export default function App() {
     }
   }, [activeTab]);
 
-  // Dispara checagem inicial de lembretes para a data de hoje (14/09/2026)
+  // Dispara checagem inicial de lembretes para a data de hoje dinâmica
   useEffect(() => {
-    const hojeStr = '2026-09-14';
+    const hojeStr = getHojeStr();
     const servicosHoje = servicos.filter(
       (s) => s.dataPrevista === hojeStr && s.status !== 'cancelada'
     );
@@ -94,7 +95,7 @@ export default function App() {
 
   // Contagem de serviços hoje
   const servicosHojeCount = useMemo(() => {
-    const hojeStr = '2026-09-14';
+    const hojeStr = getHojeStr();
     return servicos.filter((s) => s.dataPrevista === hojeStr && s.status !== 'cancelada').length;
   }, [servicos]);
 
