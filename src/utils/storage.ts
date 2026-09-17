@@ -2,7 +2,29 @@ import { ProdutorRural, SolicitacaoServico, StatusServico, EstatisticasProdutor 
 import { PRODUTORES_INICIAIS, SERVICOS_INICIAIS } from '../data/initialData';
 
 const PRODUTORES_KEY = 'agro_produtores_rurais_v1';
-const SERVICOS_KEY = 'agro_servicos_rurais_v1';
+const SERVICOS_KEY = 'agro_servicos_rurais_v2';
+const SERVICOS_KEY_V1 = 'agro_servicos_rurais_v1';
+
+const MAPA_SERVICOS_LEGADOS: Record<string, string> = {
+  'Preparo de Solo e Gradagem': 'Grade Aradora',
+  'Gradagem e Preparo de Solo': 'Grade Aradora',
+  'Plantio Mecanizado': 'Arado',
+  'Plantio Mecanizado de Soja': 'Grade Leve',
+  'Pulverização e Aplicação de Defensivos': 'Arado',
+  'Adubação e Calagem de Solo': 'Sulcador',
+  'Adubação de Cobertura': 'Roçadeira',
+  'Análise de Solo e Calagem': 'Sulcador',
+  'Colheita Mecanizada': 'Ensiladeira',
+  'Análise de Solo e Vistoria Agronômica': 'Sulcador',
+  'Manutenção de Maquinário Agrícola': 'Batedor de Cereais (Milho)',
+  'Poda e Manejo Fitossanitário': 'Carroça (lenha)',
+  'Poda e Desbrota de Cafezais': 'Carroça (lenha)',
+  'Transporte e Frete de Safra': 'Carroça (Silagem)',
+  'Manejo de Pastagem e Silagem': 'Carroça (Silagem)',
+  'Consultoria Agronômica e Manejo de Pastagem': 'Carroça (Silagem)',
+  'Subsolagem e Descompactação': 'Trator (corrente para arrasto)',
+  'Vistoria Fitossanitária': 'Batedor de Cereais (Feijão)',
+};
 
 export function getStoredProdutores(): ProdutorRural[] {
   try {
@@ -30,6 +52,21 @@ export function getStoredServicos(): SolicitacaoServico[] {
   try {
     const data = localStorage.getItem(SERVICOS_KEY);
     if (!data) {
+      // Migração suave se existia v1
+      const oldData = localStorage.getItem(SERVICOS_KEY_V1);
+      if (oldData) {
+        try {
+          const parsedOld: SolicitacaoServico[] = JSON.parse(oldData);
+          const migrated = parsedOld.map((s) => ({
+            ...s,
+            tipoServico: MAPA_SERVICOS_LEGADOS[s.tipoServico] || s.tipoServico,
+          }));
+          localStorage.setItem(SERVICOS_KEY, JSON.stringify(migrated));
+          return migrated;
+        } catch {
+          // fallback para inicial
+        }
+      }
       localStorage.setItem(SERVICOS_KEY, JSON.stringify(SERVICOS_INICIAIS));
       return SERVICOS_INICIAIS;
     }

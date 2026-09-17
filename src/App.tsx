@@ -176,10 +176,41 @@ export default function App() {
     setServiceFormOpen(true);
   };
 
-  const handleUpdateServicoStatus = (servicoId: string, novoStatus: StatusServico) => {
+  const handleUpdateServicoStatus = (
+    servicoId: string,
+    novoStatus: StatusServico,
+    extras?: { tempoServico?: string; valor?: number; dataConclusao?: string }
+  ) => {
     setServicos((prev) =>
-      prev.map((s) => (s.id === servicoId ? { ...s, status: novoStatus } : s))
+      prev.map((s) => {
+        if (s.id === servicoId) {
+          return {
+            ...s,
+            status: novoStatus,
+            tempoServico: extras?.tempoServico !== undefined ? extras.tempoServico : s.tempoServico,
+            valor: extras?.valor !== undefined ? extras.valor : s.valor,
+            dataConclusao:
+              extras?.dataConclusao ||
+              (novoStatus === 'realizada' ? (s.dataConclusao || s.dataPrevista) : s.dataConclusao),
+          };
+        }
+        return s;
+      })
     );
+    setServiceDetailModalServico((curr) => {
+      if (curr && curr.id === servicoId) {
+        return {
+          ...curr,
+          status: novoStatus,
+          tempoServico: extras?.tempoServico !== undefined ? extras.tempoServico : curr.tempoServico,
+          valor: extras?.valor !== undefined ? extras.valor : curr.valor,
+          dataConclusao:
+            extras?.dataConclusao ||
+            (novoStatus === 'realizada' ? (curr.dataConclusao || curr.dataPrevista) : curr.dataConclusao),
+        };
+      }
+      return curr;
+    });
     mostrarToast(`Status do serviço ${servicoId} atualizado para "${novoStatus}".`);
   };
 
@@ -238,7 +269,7 @@ export default function App() {
       )}
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 pb-20 sm:pb-8">
         {activeTab === 'calendario' && (
           <CalendarView
             produtores={produtores}
@@ -264,7 +295,7 @@ export default function App() {
       </main>
 
       {/* Rodapé Simples e Discreto */}
-      <footer className="bg-white border-t border-zinc-200 py-4 px-4 sm:px-8 text-xs text-zinc-500 mt-auto">
+      <footer className="bg-white border-t border-zinc-200 py-4 px-4 sm:px-8 text-xs text-zinc-500 mt-auto mb-16 sm:mb-0">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
@@ -377,7 +408,7 @@ export default function App() {
 
       {/* Toast de Confirmação */}
       {toastMsg && (
-        <div className="fixed bottom-5 right-5 z-50 bg-zinc-900 text-white px-4 py-3 rounded-xl shadow-xl border border-zinc-700 text-xs font-semibold flex items-center gap-2 animate-in slide-in-from-bottom-3 duration-200">
+        <div className="fixed bottom-20 sm:bottom-5 right-5 z-50 bg-zinc-900 text-white px-4 py-3 rounded-xl shadow-xl border border-zinc-700 text-xs font-semibold flex items-center gap-2 animate-in slide-in-from-bottom-3 duration-200">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{toastMsg}</span>
         </div>

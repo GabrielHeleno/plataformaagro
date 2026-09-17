@@ -531,6 +531,12 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
                             {srv.descricao}
                           </p>
                         )}
+                        {srv.tempoServico && (
+                          <div className="mt-1.5 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 w-fit flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-emerald-600" />
+                            <span>Tempo Realizado: <strong>{srv.tempoServico}</strong></span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Observações da Solicitação */}

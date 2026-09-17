@@ -8,16 +8,39 @@ export type StatusServico =
   | 'pago'
   | 'sem pagamento confirmado';
 
+// Tipos de serviços de patrulha mecanizada / agrícola disponíveis para seleção
+export const TIPOS_SERVICOS_DISPONIVEIS = [
+  'Arado',
+  'Grade Leve',
+  'Grade Aradora',
+  'Sulcador',
+  'Ensiladeira',
+  'Roçadeira',
+  'Batedor de Cereais (Feijão)',
+  'Batedor de Cereais (Milho)',
+  'Bartedor de Cereais (Outros)',
+  'Carroça (bambu)',
+  'Carroça (lenha)',
+  'Carroça (estacas)',
+  'Carroça (madeira)',
+  'Carroça (Silagem)',
+  'Carroça (outros)',
+  'Trator (corrente para arrasto)',
+] as const;
+
+export type TipoServico = typeof TIPOS_SERVICOS_DISPONIVEIS[number] | string;
+
 export interface SolicitacaoServico {
   id: string; // Ex: "SRV-101"
   produtorId: string; // Ex: "PR-001"
   dataPrevista: string; // "YYYY-MM-DD"
   horaPrevista?: string; // "HH:mm"
-  tipoServico: string; // Ex: "Preparo de Solo", "Colheita de Milho", "Pulverização"
+  tipoServico: TipoServico;
   descricao: string; // Descrição detalhada
   status: StatusServico;
   observacoes: string;
-  valor?: number; // R$
+  valor?: number; // R$ livre (permite valores quebrados/centavos)
+  tempoServico?: string; // Tempo/duração do serviço realizado (Ex: "2h 30min", "4 horas", "01:45")
   dataCriacao: string;
   dataConclusao?: string;
 }

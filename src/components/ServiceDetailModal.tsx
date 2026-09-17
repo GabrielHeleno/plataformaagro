@@ -9,6 +9,7 @@ import {
   FileText,
   Edit,
   Trash2,
+  CheckCircle,
   CheckCircle2,
   ExternalLink,
 } from 'lucide-react';
@@ -28,7 +29,11 @@ interface ServiceDetailModalProps {
   onClose: () => void;
   onOpenProdutor: (produtor: ProdutorRural) => void;
   onEditServico: (servico: SolicitacaoServico) => void;
-  onUpdateStatus: (servicoId: string, novoStatus: StatusServico) => void;
+  onUpdateStatus: (
+    servicoId: string,
+    novoStatus: StatusServico,
+    extras?: { tempoServico?: string; valor?: number; dataConclusao?: string }
+  ) => void;
   onDeleteServico?: (servicoId: string) => void;
 }
 
@@ -44,6 +49,22 @@ export const ServiceDetailModal: React.FC<ServiceDetailModalProps> = ({
 }) => {
   const statusCfg = STATUS_CONFIG[servico.status];
   const temPendencia = produtor ? verificarPendenciaProdutor(produtor.id, todosServicos) : false;
+
+  const [modoRealizado, setModoRealizado] = React.useState<boolean>(false);
+  const [tempoInput, setTempoInput] = React.useState<string>(servico.tempoServico || '');
+  const [valorInput, setValorInput] = React.useState<string>(
+    servico.valor !== undefined ? String(servico.valor) : ''
+  );
+
+  const handleSalvarConclusao = (e: React.FormEvent) => {
+    e.preventDefault();
+    const valNumerico = valorInput !== '' ? parseFloat(valorInput.replace(',', '.')) : undefined;
+    onUpdateStatus(servico.id, 'realizada', {
+      tempoServico: tempoInput.trim() || undefined,
+      valor: valNumerico !== undefined && !isNaN(valNumerico) ? valNumerico : undefined,
+    });
+    setModoRealizado(false);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-zinc-950/70 backdrop-blur-xs overflow-y-auto">
@@ -151,6 +172,26 @@ export const ServiceDetailModal: React.FC<ServiceDetailModalProps> = ({
               </p>
             </div>
 
+            {/* Tempo de Serviço Realizado e Conclusão */}
+            {servico.tempoServico && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-emerald-900 font-bold">
+                  <Clock className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>Tempo de Serviço Realizado:</span>
+                </div>
+                <span className="bg-emerald-200 text-emerald-950 font-bold px-2 py-0.5 rounded text-xs">
+                  {servico.tempoServico}
+                </span>
+              </div>
+            )}
+
+            {servico.dataConclusao && (
+              <div className="flex items-center justify-between text-xs text-zinc-600 bg-zinc-50 p-2 rounded-lg border border-zinc-100">
+                <span>Data Efetiva de Conclusão:</span>
+                <span className="font-bold text-zinc-900">{formatarDataBR(servico.dataConclusao)}</span>
+              </div>
+            )}
+
             {servico.observacoes && (
               <div>
                 <span className="text-zinc-400 font-semibold block mb-1">Observações:</span>
@@ -167,9 +208,79 @@ export const ServiceDetailModal: React.FC<ServiceDetailModalProps> = ({
               </span>
             </div>
 
+            {/* Painel Condicional para quando marca como "Realizada" */}
+            {modoRealizado && (
+              <form
+                onSubmit={handleSalvarConclusao}
+                className="bg-emerald-50/90 border-2 border-emerald-500 rounded-xl p-3 space-y-2.5 animate-in fade-in zoom-in-95 duration-150"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4 text-emerald-700" />
+                    <span>Concluir Serviço como "Realizado"</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setModoRealizado(false)}
+                    className="text-xs text-zinc-500 hover:text-zinc-700"
+                  >
+                    Fechar
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-bold text-zinc-800 block mb-1">
+                      Tempo de Serviço Realizado <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={tempoInput}
+                      onChange={(e) => setTempoInput(e.target.value)}
+                      placeholder="Ex: 2h 30min, 4 horas"
+                      required
+                      className="w-full px-2.5 py-1.5 border border-emerald-400 rounded-lg text-xs font-bold bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-zinc-800 block mb-1">
+                      Valor Final (R$) - Livre
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={valorInput}
+                      onChange={(e) => setValorInput(e.target.value)}
+                      placeholder="0,00 (qualquer valor)"
+                      className="w-full px-2.5 py-1.5 border border-emerald-400 rounded-lg text-xs font-bold bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setModoRealizado(false)}
+                    className="px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-200/50 rounded"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold shadow-xs flex items-center gap-1"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>Confirmar Realização</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
             {/* Mudar Status Rapidamente */}
             <div className="pt-2 border-t border-zinc-100">
-              <label className="text-zinc-600 font-bold block mb-1.5">
+              <label className="text-zinc-600 font-bold block mb-1.5 text-xs">
                 Atualizar Status do Serviço:
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
@@ -180,7 +291,14 @@ export const ServiceDetailModal: React.FC<ServiceDetailModalProps> = ({
                     <button
                       key={st}
                       type="button"
-                      onClick={() => onUpdateStatus(servico.id, st)}
+                      onClick={() => {
+                        if (st === 'realizada') {
+                          setModoRealizado(true);
+                        } else {
+                          setModoRealizado(false);
+                          onUpdateStatus(servico.id, st);
+                        }
+                      }}
                       className={`p-1.5 rounded-md border text-[11px] font-semibold transition-all ${
                         isCurrent
                           ? `${cfg.bg} ${cfg.text} ${cfg.border} ring-2 ring-emerald-500 font-bold`

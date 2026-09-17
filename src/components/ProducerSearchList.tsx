@@ -94,41 +94,44 @@ export const ProducerSearchList: React.FC<ProducerSearchListProps> = ({
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
           <div>
             <h1 className="text-xl font-bold text-zinc-900 tracking-tight flex items-center gap-2">
-              <Search className="w-5 h-5 text-emerald-700" />
-              <span>Janela de Busca de Produtores Rurais</span>
+              <Search className="w-5 h-5 text-emerald-700 shrink-0" />
+              <span>Busca de Produtores Rurais</span>
             </h1>
             <p className="text-xs sm:text-sm text-zinc-500 mt-1">
-              Digite parte ou o valor completo do <span className="font-semibold text-zinc-700">CPF, Nome, Apelido ou Telefone</span> para visualizar as correspondências.
+              Busque por <span className="font-semibold text-zinc-700">CPF, Nome, Apelido ou Telefone</span> com busca em tempo real.
             </p>
           </div>
 
           <button
             onClick={onOpenNovoProdutor}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-sm rounded-lg shadow-sm transition-all active:scale-95 shrink-0"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all active:scale-95 shrink-0"
+            title="Cadastrar Novo Produtor"
           >
-            <UserPlus className="w-4 h-4 text-emerald-200" />
-            <span>Cadastrar Produtor</span>
+            <UserPlus className="w-4 h-4 text-emerald-200 shrink-0" />
+            <span className="hidden sm:inline">Novo Produtor</span>
+            <span className="sm:hidden">Novo</span>
           </button>
         </div>
 
         {/* Campo de Busca Rápida com Ícones de Limpeza */}
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-emerald-600" />
+            <Search className="h-4.5 w-4.5 text-emerald-600" />
           </div>
           <input
             id="input-busca-produtores"
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Digite CPF, Nome Completo, Apelido ou Telefone para buscar..."
-            className="block w-full pl-11 pr-10 py-3 text-base border-2 border-zinc-200 rounded-xl bg-zinc-50 placeholder-zinc-400 focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-4 focus:ring-emerald-100 transition-all font-medium"
+            placeholder="Digite CPF, Nome, Apelido ou Telefone..."
+            className="block w-full pl-10 pr-9 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-zinc-200 rounded-xl bg-zinc-50 placeholder-zinc-400 focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-4 focus:ring-emerald-100 transition-all font-medium"
             autoFocus
           />
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-400 hover:text-zinc-600 text-sm font-semibold"
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-400 hover:text-zinc-600 text-xs font-semibold"
+              aria-label="Limpar busca"
             >
               ✕ Limpar
             </button>
@@ -137,13 +140,13 @@ export const ProducerSearchList: React.FC<ProducerSearchListProps> = ({
 
         {/* Barra de Filtros Adicionais e Estatísticas Rápidas */}
         <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t border-zinc-100 text-xs text-zinc-600">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="font-medium text-zinc-500">
-              Mostrando <strong className="text-zinc-900">{correspondencias.length}</strong> de {produtores.length} produtores cadastrados
+              <strong className="text-zinc-900">{correspondencias.length}</strong> de {produtores.length} cadastrados
             </span>
             {searchTerm && (
-              <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 font-medium">
-                Filtrando por "{searchTerm}"
+              <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 font-medium text-[11px]">
+                "{searchTerm}"
               </span>
             )}
           </div>
@@ -151,14 +154,17 @@ export const ProducerSearchList: React.FC<ProducerSearchListProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSomentePendentes(!somentePendentes)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-medium transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg border font-medium text-xs transition-all ${
                 somentePendentes
-                  ? 'bg-red-50 text-red-700 border-red-300 ring-2 ring-red-400'
+                  ? 'bg-red-50 text-red-700 border-red-300 ring-2 ring-red-400 shadow-sm'
                   : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
               }`}
+              title="Filtrar produtores com pendências financeiras"
             >
               <AlertTriangle className={`w-3.5 h-3.5 ${somentePendentes ? 'text-red-600' : 'text-zinc-400'}`} />
-              <span>Apenas com Pendências ({totalPendentes})</span>
+              <span className="hidden sm:inline">Com Pendências</span>
+              <span className="sm:hidden">Pendentes</span>
+              <span className="font-bold">({totalPendentes})</span>
             </button>
           </div>
         </div>

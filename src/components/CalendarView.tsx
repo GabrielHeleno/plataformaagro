@@ -11,9 +11,11 @@ import {
   CheckCircle2,
   Bell,
   Search,
+  Layers,
+  Tractor,
 } from 'lucide-react';
-import { ProdutorRural, SolicitacaoServico, StatusServico } from '../types';
-import { STATUS_CONFIG, LISTA_STATUS, verificarPendenciaProdutor, formatarDataBR } from '../utils/storage';
+import { ProdutorRural, SolicitacaoServico, StatusServico, TIPOS_SERVICOS_DISPONIVEIS } from '../types';
+import { STATUS_CONFIG, LISTA_STATUS, verificarPendenciaProdutor, formatarDataBR, formatarMoeda } from '../utils/storage';
 
 interface CalendarViewProps {
   produtores: ProdutorRural[];
@@ -36,6 +38,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const hoje = new Date();
   const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 8, 14)); // 14/09/2026
   const [statusFiltro, setStatusFiltro] = useState<string>('todos');
+  const [tipoServicoFiltro, setTipoServicoFiltro] = useState<string>('todos');
   const [filtroTexto, setFiltroTexto] = useState<string>('');
   const [diaSelecionado, setDiaSelecionado] = useState<string | null>('2026-09-14');
 
@@ -79,6 +82,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       if (statusFiltro !== 'todos' && serv.status !== statusFiltro) {
         return false;
       }
+      // Filtro por tipo de serviço
+      if (tipoServicoFiltro !== 'todos' && serv.tipoServico !== tipoServicoFiltro) {
+        return false;
+      }
       // Filtro de texto (nome, apelido, serviço)
       if (filtroTexto.trim()) {
         const prod = produtoresMap.get(serv.produtorId);
@@ -95,7 +102,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       }
       return true;
     });
-  }, [servicos, statusFiltro, filtroTexto, produtoresMap]);
+  }, [servicos, statusFiltro, tipoServicoFiltro, filtroTexto, produtoresMap]);
 
   // Agrupa serviços filtrados por data "YYYY-MM-DD"
   const servicosPorData = useMemo(() => {
@@ -183,55 +190,65 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           <button
             onClick={onOpenReminders}
-            className="flex items-center gap-2 px-3 py-2 bg-emerald-950/60 hover:bg-emerald-950 text-white text-xs font-semibold rounded-lg border border-emerald-600/60 transition-all shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 bg-emerald-950/60 hover:bg-emerald-950 text-white text-xs font-semibold rounded-xl border border-emerald-600/60 transition-all shadow-sm active:scale-95"
+            title={`Lembretes Diários (${totalHoje} hoje)`}
           >
-            <Bell className="w-4 h-4 text-amber-300" />
-            <span>Lembretes Diários ({totalHoje} hoje)</span>
+            <Bell className="w-4 h-4 text-amber-300 shrink-0" />
+            <span className="hidden sm:inline">Lembretes</span>
+            <span className="bg-emerald-800/80 px-1.5 py-0.2 rounded-full text-[11px] font-bold text-emerald-200">
+              {totalHoje}
+            </span>
           </button>
 
           <button
             onClick={() => onAddServico(diaSelecionado || hojeStr)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold rounded-lg shadow transition-all active:scale-95 ml-auto md:ml-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold rounded-xl shadow transition-all active:scale-95 border border-amber-400"
+            title="Agendar Novo Serviço"
           >
-            <Plus className="w-4 h-4" />
-            <span>Agendar Serviço</span>
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Agendar</span>
           </button>
         </div>
       </div>
 
       {/* Barra de Controles: Navegação de Mês, Busca e Filtro de Status */}
-      <div className="bg-white rounded-xl p-4 shadow-sm border border-zinc-200 space-y-3">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-zinc-200 space-y-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3">
           {/* Navegação de Mês */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center bg-zinc-100 rounded-lg p-1 border border-zinc-200">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+            <div className="flex items-center bg-zinc-100 rounded-xl p-0.5 sm:p-1 border border-zinc-200">
               <button
                 onClick={handlePrevMonth}
-                className="p-1.5 hover:bg-white rounded-md text-zinc-700 transition-colors shadow-sm"
+                className="p-1.5 hover:bg-white rounded-lg text-zinc-700 transition-colors shadow-sm"
                 title="Mês Anterior"
+                aria-label="Mês Anterior"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
-              <span className="px-3 py-1 font-bold text-zinc-800 text-base min-w-[180px] text-center">
+              <span className="px-2 sm:px-3 py-1 font-bold text-zinc-800 text-sm sm:text-base min-w-[130px] sm:min-w-[170px] text-center">
                 {nomeMesCapitalizado}
               </span>
               <button
                 onClick={handleNextMonth}
-                className="p-1.5 hover:bg-white rounded-md text-zinc-700 transition-colors shadow-sm"
+                className="p-1.5 hover:bg-white rounded-lg text-zinc-700 transition-colors shadow-sm"
                 title="Próximo Mês"
+                aria-label="Próximo Mês"
               >
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
 
             <button
               onClick={handleIrParaHoje}
-              className="px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors"
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors shrink-0"
+              title="Ir para a data de hoje (14/09)"
             >
-              Hoje (14/09)
+              <CalendarIcon className="w-3.5 h-3.5 text-emerald-700" />
+              <span className="hidden sm:inline">Hoje</span>
+              <span className="sm:hidden text-[11px]">14/09</span>
             </button>
           </div>
 
@@ -242,13 +259,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               type="text"
               value={filtroTexto}
               onChange={(e) => setFiltroTexto(e.target.value)}
-              placeholder="Filtrar por produtor, serviço..."
-              className="w-full pl-9 pr-3 py-1.5 text-sm bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-colors"
+              placeholder="Filtrar produtor, serviço..."
+              className="w-full pl-9 pr-7 py-1.5 text-sm bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-colors"
             />
             {filtroTexto && (
               <button
                 onClick={() => setFiltroTexto('')}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-zinc-600"
+                aria-label="Limpar filtro"
               >
                 ✕
               </button>
@@ -256,44 +274,71 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </div>
         </div>
 
-        {/* Filtros por Status (Exigência Explícita) */}
-        <div className="border-t border-zinc-100 pt-3 flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-          <div className="flex items-center gap-1.5 text-zinc-500 font-semibold shrink-0 mr-1">
-            <Filter className="w-3.5 h-3.5" />
-            <span>Filtro por Status:</span>
+        {/* Filtros por Status e Tipo de Serviço - Mais Ícones e Mais Limpo */}
+        <div className="border-t border-zinc-100 pt-2.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-2.5 text-xs">
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+            <div className="flex items-center gap-1 text-zinc-500 font-semibold shrink-0 mr-1">
+              <Filter className="w-3.5 h-3.5 text-zinc-400" />
+              <span className="hidden sm:inline">Status:</span>
+            </div>
+
+            <button
+              onClick={() => setStatusFiltro('todos')}
+              className={`px-2.5 py-1 rounded-lg font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
+                statusFiltro === 'todos'
+                  ? 'bg-zinc-800 text-white shadow-sm'
+                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Todos</span>
+              <span className="text-[10px] opacity-75 font-mono">({servicos.length})</span>
+            </button>
+
+            {LISTA_STATUS.map((st) => {
+              const config = STATUS_CONFIG[st];
+              const isSelected = statusFiltro === st;
+              const count = servicos.filter((s) => s.status === st).length;
+              return (
+                <button
+                  key={st}
+                  onClick={() => setStatusFiltro(st)}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-all shrink-0 flex items-center gap-1.5 border ${
+                    isSelected
+                      ? `${config.bg} ${config.text} ${config.border} ring-2 ring-emerald-500 font-bold shadow-sm`
+                      : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
+                  }`}
+                  title={`Filtrar por ${config.label}`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${config.dotColor} shrink-0`} />
+                  <span>{config.label}</span>
+                  <span className="text-[10px] opacity-75 font-mono">({count})</span>
+                </button>
+              );
+            })}
           </div>
 
-          <button
-            onClick={() => setStatusFiltro('todos')}
-            className={`px-2.5 py-1 rounded-full font-medium transition-colors shrink-0 ${
-              statusFiltro === 'todos'
-                ? 'bg-zinc-800 text-white shadow-sm'
-                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-            }`}
-          >
-            Todos ({servicos.length})
-          </button>
-
-          {LISTA_STATUS.map((st) => {
-            const config = STATUS_CONFIG[st];
-            const isSelected = statusFiltro === st;
-            const count = servicos.filter((s) => s.status === st).length;
-            return (
-              <button
-                key={st}
-                onClick={() => setStatusFiltro(st)}
-                className={`px-2.5 py-1 rounded-full font-medium transition-all shrink-0 flex items-center gap-1.5 border ${
-                  isSelected
-                    ? `${config.bg} ${config.text} ${config.border} ring-2 ring-emerald-500 font-bold shadow-sm`
-                    : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
-                }`}
-              >
-                <span className={`w-2 h-2 rounded-full ${config.dotColor}`} />
-                <span>{config.label}</span>
-                <span className="text-[10px] opacity-75 font-mono">({count})</span>
-              </button>
-            );
-          })}
+          {/* Filtro por Tipo de Serviço */}
+          <div className="flex items-center gap-1.5 shrink-0 w-full md:w-auto justify-end pt-1 md:pt-0 border-t md:border-t-0 border-zinc-100">
+            <Tractor className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+            <span className="text-zinc-500 font-medium shrink-0">Serviço:</span>
+            <select
+              value={tipoServicoFiltro}
+              onChange={(e) => setTipoServicoFiltro(e.target.value)}
+              className="py-1 px-2.5 text-xs bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 max-w-[220px] truncate"
+              title="Filtrar por tipo de serviço"
+            >
+              <option value="todos">Todos os serviços ({servicos.length})</option>
+              {TIPOS_SERVICOS_DISPONIVEIS.map((t) => {
+                const count = servicos.filter((s) => s.tipoServico === t).length;
+                return (
+                  <option key={t} value={t}>
+                    {t} ({count})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -519,6 +564,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             <span>Horário previsto: {serv.horaPrevista}</span>
                           </div>
                         )}
+                        {serv.tempoServico && (
+                          <div className="text-emerald-800 font-semibold flex items-center gap-1 text-[11px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 w-fit">
+                            <Clock className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <span>Tempo Realizado: <strong>{serv.tempoServico}</strong></span>
+                          </div>
+                        )}
                         {serv.descricao && (
                           <p className="text-zinc-600 text-[11px] line-clamp-2 mt-1">
                             {serv.descricao}
@@ -550,8 +601,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       ) : (
                         <span className="text-zinc-400">Sem cadastro</span>
                       )}
-                      <span className="text-zinc-500 font-medium">
-                        {serv.valor ? `R$ ${serv.valor.toLocaleString('pt-BR')}` : 'A orçar'}
+                      <span className="text-zinc-700 font-bold font-mono text-xs">
+                        {serv.valor !== undefined ? formatarMoeda(serv.valor) : 'A orçar'}
                       </span>
                     </div>
                   </div>
