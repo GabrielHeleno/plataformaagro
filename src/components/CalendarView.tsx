@@ -25,6 +25,7 @@ import {
   getHojeStr,
 } from '../utils/storage';
 import { exportarServicosCSV } from '../utils/exportCsv';
+import { WeatherWidget } from './WeatherWidget';
 
 interface CalendarViewProps {
   produtores: ProdutorRural[];
@@ -33,6 +34,7 @@ interface CalendarViewProps {
   onSelectServico: (servico: SolicitacaoServico, produtor?: ProdutorRural) => void;
   onAddServico: (dataPrevia?: string) => void;
   onOpenReminders: () => void;
+  onOpenFila?: () => void;
 }
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
@@ -42,6 +44,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onSelectServico,
   onAddServico,
   onOpenReminders,
+  onOpenFila,
 }) => {
   // Data de hoje dinâmica baseada no sistema do usuário
   const hojeStr = getHojeStr();
@@ -179,6 +182,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
   // Contagem de hoje
   const totalHoje = servicos.filter((s) => s.dataPrevista === hojeStr && s.status !== 'cancelada').length;
+  // Contagem da fila de espera
+  const totalNaFila = servicos.filter(
+    (s) => s.status === 'na fila' || s.status === 'em espera' || !s.dataPrevista || s.dataPrevista.trim() === ''
+  ).length;
 
   return (
     <div className="space-y-4">
@@ -197,7 +204,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap sm:flex-nowrap">
+          {totalNaFila > 0 && onOpenFila && (
+            <button
+              onClick={onOpenFila}
+              className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 bg-amber-500/25 hover:bg-amber-500/35 text-amber-200 text-xs font-extrabold rounded-xl border border-amber-400/50 transition-all shadow-sm active:scale-95"
+              title={`${totalNaFila} serviço(s) na Fila de Espera aguardando agendamento`}
+            >
+              <Clock className="w-4 h-4 text-amber-300 shrink-0" />
+              <span className="hidden sm:inline">Fila de Espera</span>
+              <span className="bg-amber-500 text-zinc-950 px-1.5 py-0.2 rounded-full text-[11px] font-black">
+                {totalNaFila}
+              </span>
+            </button>
+          )}
+
           <button
             onClick={() => exportarServicosCSV(servicos, produtores)}
             className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 bg-emerald-950/60 hover:bg-emerald-950 text-white text-xs font-semibold rounded-xl border border-emerald-600/60 transition-all shadow-sm active:scale-95"
@@ -230,6 +251,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Previsão do Tempo (5 Dias) com Ícones e Chuva Numérica (CPTEC / INPE & ClimaTempo) */}
+      <WeatherWidget />
 
       {/* Barra de Controles: Navegação de Mês, Busca e Filtro de Status */}
       <div className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-zinc-200 space-y-3">

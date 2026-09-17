@@ -38,15 +38,21 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
   const [produtorId, setProdutorId] = useState<string>(
     servicoInicial?.produtorId || produtorIdFixo || (produtores[0]?.id || '')
   );
-  const [dataPrevista, setDataPrevista] = useState<string>(
-    servicoInicial?.dataPrevista || dataInicial || getHojeStr()
-  );
+  const [dataPrevista, setDataPrevista] = useState<string>(() => {
+    if (servicoInicial) return servicoInicial.dataPrevista || '';
+    if (dataInicial) return dataInicial;
+    return ''; // Vazio por padrão para permitir agendar ou colocar na fila
+  });
   const [horaPrevista, setHoraPrevista] = useState<string>(servicoInicial?.horaPrevista || '08:00');
   const [tipoServico, setTipoServico] = useState<string>(
     servicoInicial?.tipoServico || TIPOS_SERVICOS_DISPONIVEIS[0]
   );
   const [descricao, setDescricao] = useState<string>(servicoInicial?.descricao || '');
-  const [status, setStatus] = useState<StatusServico>(servicoInicial?.status || 'agendada');
+  const [status, setStatus] = useState<StatusServico>(() => {
+    if (servicoInicial) return servicoInicial.status;
+    if (dataInicial) return 'agendada';
+    return 'na fila'; // Se não tiver data inicial, sugere 'na fila'
+  });
   const [tempoServico, setTempoServico] = useState<string>(servicoInicial?.tempoServico || '');
   const [dataConclusao, setDataConclusao] = useState<string>(
     servicoInicial?.dataConclusao || (servicoInicial?.dataPrevista || dataInicial || getHojeStr())
@@ -65,10 +71,13 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
       setErro('Selecione o produtor rural associado.');
       return;
     }
-    if (!dataPrevista) {
-      setErro('Informe a data prevista para o serviço.');
+
+    const isFila = status === 'na fila' || status === 'em espera' || !dataPrevista.trim();
+    if (!isFila && !dataPrevista.trim()) {
+      setErro('Informe a data prevista para o serviço ou selecione o status "Na Fila / Em Espera".');
       return;
     }
+
     if (!tipoServico.trim()) {
       setErro('Informe o tipo de serviço.');
       return;
@@ -84,19 +93,24 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
 
     const valorTratado = valor !== '' ? parseFloat(valor.replace(',', '.')) : undefined;
 
+    // Se não tiver data prevista, o status final é garantido como 'na fila'
+    const statusFinal: StatusServico = !dataPrevista.trim() && (status === 'agendada' || status === 'na fila' || status === 'em espera')
+      ? 'na fila'
+      : status;
+
     const servicoSalvar: SolicitacaoServico = {
       id,
       produtorId,
-      dataPrevista,
-      horaPrevista,
+      dataPrevista: dataPrevista.trim(),
+      horaPrevista: dataPrevista.trim() ? horaPrevista : undefined,
       tipoServico: tipoServico.trim(),
       descricao: descricao.trim(),
-      status,
+      status: statusFinal,
       observacoes: observacoes.trim(),
       valor: valorTratado !== undefined && !isNaN(valorTratado) ? valorTratado : undefined,
       tempoServico: status === 'realizada' || tempoServico.trim() ? tempoServico.trim() : undefined,
       dataCriacao: servicoInicial?.dataCriacao || new Date().toISOString().split('T')[0],
-      dataConclusao: status === 'realizada' || status === 'pago' ? (dataConclusao || dataPrevista) : undefined,
+      dataConclusao: status === 'realizada' || status === 'pago' ? (dataConclusao || dataPrevista || getHojeStr()) : undefined,
     };
 
     onSave(servicoSalvar);
@@ -185,12 +199,22 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
               <div className="flex items-center justify-between mb-1">
                 <label className="font-bold text-zinc-700 flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>Data Prevista <span className="text-red-500">*</span></span>
+                  <span>
+                    Data Prevista{' '}
+                    {status === 'na fila' || status === 'em espera' || !dataPrevista ? (
+                      <span className="text-zinc-500 font-normal text-[11px]">(Opcional / Na Fila)</span>
+                    ) : (
+                      <span className="text-red-500">*</span>
+                    )}
+                  </span>
                 </label>
                 <div className="flex items-center gap-1 text-[11px]">
                   <button
                     type="button"
-                    onClick={() => setDataPrevista(getHojeStr())}
+                    onClick={() => {
+                      setDataPrevista(getHojeStr());
+                      if (status === 'na fila' || status === 'em espera') setStatus('agendada');
+                    }}
                     className="text-emerald-700 hover:underline font-semibold"
                   >
                     Hoje ({formatarDataBR(getHojeStr()).slice(0, 5)})
@@ -198,7 +222,10 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                   <span>•</span>
                   <button
                     type="button"
-                    onClick={() => setDataPrevista(getAmanhaStr())}
+                    onClick={() => {
+                      setDataPrevista(getAmanhaStr());
+                      if (status === 'na fila' || status === 'em espera') setStatus('agendada');
+                    }}
                     className="text-emerald-700 hover:underline font-semibold"
                   >
                     Amanhã ({formatarDataBR(getAmanhaStr()).slice(0, 5)})
@@ -208,10 +235,34 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
               <input
                 type="date"
                 value={dataPrevista}
-                onChange={(e) => setDataPrevista(e.target.value)}
-                required
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDataPrevista(val);
+                  if (val && (status === 'na fila' || status === 'em espera')) {
+                    setStatus('agendada');
+                  }
+                }}
                 className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-zinc-900 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
               />
+              <div className="mt-1 flex items-center justify-between">
+                {dataPrevista ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDataPrevista('');
+                      setStatus('na fila');
+                    }}
+                    className="text-[11px] text-amber-700 hover:text-amber-900 hover:underline font-medium"
+                  >
+                    Remover data e colocar na Fila de Espera
+                  </button>
+                ) : (
+                  <span className="text-[11px] font-semibold text-amber-700 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+                    Sem data definida (ficará na Fila de Espera)
+                  </span>
+                )}
+              </div>
             </div>
 
             <div>
@@ -223,8 +274,14 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                 type="time"
                 value={horaPrevista}
                 onChange={(e) => setHoraPrevista(e.target.value)}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-zinc-900 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                disabled={!dataPrevista}
+                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-zinc-900 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-400"
               />
+              {!dataPrevista && (
+                <span className="text-[11px] text-zinc-400 block mt-1">
+                  Disponível após definir a data
+                </span>
+              )}
             </div>
           </div>
 

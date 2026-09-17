@@ -1,4 +1,6 @@
 export type StatusServico =
+  | 'na fila'
+  | 'em espera'
   | 'agendada'
   | 'adiada'
   | 'cancelada'

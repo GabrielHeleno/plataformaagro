@@ -254,4 +254,28 @@ export const SERVICOS_INICIAIS: SolicitacaoServico[] = [
     valor: 1500,
     dataCriacao: dataRelativa(-1),
   },
+  {
+    id: 'SRV-112',
+    produtorId: 'PR-003', // Dona Paula do Café
+    dataPrevista: '',
+    horaPrevista: '',
+    tipoServico: 'Ensiladeira',
+    descricao: 'Corte e trituração de capim e milho para silagem da bacia leiteira. Aguardando ponto de umidade e definição de data.',
+    status: 'na fila',
+    observacoes: 'Produtora solicitou serviço com antecedência. Entrar em contato assim que a ensiladeira estiver liberada.',
+    valor: 3200,
+    dataCriacao: dataRelativa(-4),
+  },
+  {
+    id: 'SRV-113',
+    produtorId: 'PR-005', // Mendes da Fazenda
+    dataPrevista: '',
+    horaPrevista: '',
+    tipoServico: 'Sulcador',
+    descricao: 'Sulcamento e abertura de linhas para plantio de sorgo na Fazenda Três Morrinhos.',
+    status: 'na fila',
+    observacoes: 'Solicitou inclusão na fila de espera da patrulha para agendar após a primeira chuva.',
+    valor: 2400,
+    dataCriacao: dataRelativa(-2),
+  },
 ];

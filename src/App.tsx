@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Navbar } from './components/Navbar';
 import { CalendarView } from './components/CalendarView';
+import { WaitingListView } from './components/WaitingListView';
 import { ProducerSearchList } from './components/ProducerSearchList';
 import { ProducerDetailModal } from './components/ProducerDetailModal';
 import { ProducerFormModal } from './components/ProducerFormModal';
@@ -30,7 +31,7 @@ export default function App() {
   const [produtores, setProdutores] = useState<ProdutorRural[]>(() => getStoredProdutores());
   const [servicos, setServicos] = useState<SolicitacaoServico[]>(() => getStoredServicos());
 
-  const [activeTab, setActiveTab] = useState<'calendario' | 'produtores' | 'novo-produtor'>('calendario');
+  const [activeTab, setActiveTab] = useState<'calendario' | 'fila-espera' | 'produtores' | 'novo-produtor'>('calendario');
 
   // Modais e visualizadores
   const [selectedProdutor, setSelectedProdutor] = useState<ProdutorRural | null>(null);
@@ -103,6 +104,13 @@ export default function App() {
   const pendenciasCount = useMemo(() => {
     return produtores.filter((p) => verificarPendenciaProdutor(p.id, servicos)).length;
   }, [produtores, servicos]);
+
+  // Contagem de serviços na fila de espera (aguardando data)
+  const filaCount = useMemo(() => {
+    return servicos.filter(
+      (s) => s.status === 'na fila' || s.status === 'em espera' || !s.dataPrevista || s.dataPrevista.trim() === ''
+    ).length;
+  }, [servicos]);
 
   // Próximo ID sugerido para novo produtor
   const proximoIdProdutor = useMemo(() => {
@@ -260,6 +268,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         servicosHojeCount={servicosHojeCount}
+        filaCount={filaCount}
         pendenciasCount={pendenciasCount}
         onOpenReminders={() => setDailyRemindersOpen(true)}
         onOpenNewService={() => handleOpenAddServico()}
@@ -297,6 +306,28 @@ export default function App() {
             onSelectServico={handleSelectServico}
             onAddServico={(data) => handleOpenAddServico(undefined, data)}
             onOpenReminders={() => setDailyRemindersOpen(true)}
+            onOpenFila={() => setActiveTab('fila-espera')}
+          />
+        )}
+
+        {activeTab === 'fila-espera' && (
+          <WaitingListView
+            servicos={servicos}
+            produtores={produtores}
+            onEditServico={(serv) => {
+              setEditingServico(serv);
+              setServiceFormDataInicial(serv.dataPrevista || undefined);
+              setServiceFormFixedProdutorId(serv.produtorId);
+              setServiceFormOpen(true);
+            }}
+            onOpenServiceDetail={(serv, prod) => {
+              setServiceDetailModalServico(serv);
+              setServiceDetailModalProdutor(prod);
+            }}
+            onOpenProdutor={(prod) => setSelectedProdutor(prod)}
+            onNewService={() => handleOpenAddServico()}
+            onSaveServico={handleSaveServico}
+            onDeleteServico={handleDeleteServico}
           />
         )}
 

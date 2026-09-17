@@ -266,6 +266,20 @@ export const STATUS_CONFIG: Record<
   StatusServico,
   { label: string; bg: string; text: string; border: string; dotColor: string }
 > = {
+  'na fila': {
+    label: 'Na Fila / Em Espera',
+    bg: 'bg-amber-50 dark:bg-amber-950/40',
+    text: 'text-amber-800 dark:text-amber-300',
+    border: 'border-amber-300 dark:border-amber-700',
+    dotColor: 'bg-amber-500',
+  },
+  'em espera': {
+    label: 'Na Fila / Em Espera',
+    bg: 'bg-amber-50 dark:bg-amber-950/40',
+    text: 'text-amber-800 dark:text-amber-300',
+    border: 'border-amber-300 dark:border-amber-700',
+    dotColor: 'bg-amber-500',
+  },
   agendada: {
     label: 'Agendada',
     bg: 'bg-blue-50 dark:bg-blue-950/40',
@@ -325,6 +339,7 @@ export const STATUS_CONFIG: Record<
 };
 
 export const LISTA_STATUS: StatusServico[] = [
+  'na fila',
   'agendada',
   'adiada',
   'cancelada',

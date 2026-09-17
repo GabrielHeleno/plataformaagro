@@ -157,13 +157,32 @@ export const ServiceDetailModal: React.FC<ServiceDetailModalProps> = ({
             <div className="grid grid-cols-2 gap-2 bg-zinc-50 p-2.5 rounded-lg border border-zinc-100">
               <div className="flex items-center gap-1.5 text-zinc-700">
                 <Calendar className="w-4 h-4 text-zinc-400" />
-                <span>Data: <strong>{formatarDataBR(servico.dataPrevista)}</strong></span>
+                <span>Data: <strong>{servico.dataPrevista ? formatarDataBR(servico.dataPrevista) : 'Sem data (Na Fila)'}</strong></span>
               </div>
               <div className="flex items-center gap-1.5 text-zinc-700">
                 <Clock className="w-4 h-4 text-zinc-400" />
-                <span>Horário: <strong>{servico.horaPrevista || 'A definir'}</strong></span>
+                <span>Horário: <strong>{servico.dataPrevista ? (servico.horaPrevista || 'A definir') : 'A definir'}</strong></span>
               </div>
             </div>
+
+            {(!servico.dataPrevista || servico.status === 'na fila' || servico.status === 'em espera') && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-2">
+                <div className="text-xs text-amber-900">
+                  <span className="font-bold block">Serviço na Fila de Espera</span>
+                  <span className="text-[11px] text-amber-700">Ainda não foi agendada uma data para este atendimento.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onEditServico(servico);
+                  }}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-lg text-xs font-bold transition-all shadow-xs shrink-0"
+                >
+                  Definir Data
+                </button>
+              </div>
+            )}
 
             <div>
               <span className="text-zinc-400 font-semibold block mb-1">Descrição Detalhada:</span>
