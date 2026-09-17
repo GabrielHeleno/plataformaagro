@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Users, UserPlus, Bell, Plus, Tractor } from 'lucide-react';
+import { Calendar, Users, UserPlus, Bell, Plus, Tractor, Database } from 'lucide-react';
 import { PermissionStatus } from '../utils/notifications';
 
 interface NavbarProps {
@@ -9,6 +9,7 @@ interface NavbarProps {
   pendenciasCount: number;
   onOpenReminders: () => void;
   onOpenNewService: () => void;
+  onOpenBackup: () => void;
   pushStatus: PermissionStatus;
 }
 
@@ -19,6 +20,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   pendenciasCount,
   onOpenReminders,
   onOpenNewService,
+  onOpenBackup,
   pushStatus,
 }) => {
   return (
@@ -109,6 +111,20 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Ações Rápidas: Notificações & Novo Serviço */}
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* Botão de Backup e Segurança de Dados */}
+              <button
+                id="btn-backup-dados"
+                onClick={onOpenBackup}
+                className="relative p-2 sm:px-2.5 sm:py-1.5 rounded-xl text-emerald-100 hover:bg-emerald-800/80 transition-all flex items-center gap-1.5 border border-emerald-700/60 bg-emerald-950/40 shadow-sm active:scale-95"
+                title="Backup e Segurança de Dados (Exportar / Importar JSON)"
+                aria-label="Backup e Segurança de Dados"
+              >
+                <Database className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-emerald-300" />
+                <span className="hidden xl:inline text-xs font-semibold text-emerald-200">
+                  Backup
+                </span>
+              </button>
+
               {/* Botão de Lembretes Diários */}
               <button
                 id="btn-lembretes-diarios"

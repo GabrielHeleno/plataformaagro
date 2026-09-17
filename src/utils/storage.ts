@@ -1,9 +1,25 @@
 import { ProdutorRural, SolicitacaoServico, StatusServico, EstatisticasProdutor } from '../types';
 import { PRODUTORES_INICIAIS, SERVICOS_INICIAIS } from '../data/initialData';
+import { idbGet, idbSet } from './indexedDB';
 
-const PRODUTORES_KEY = 'agro_produtores_rurais_v1';
-const SERVICOS_KEY = 'agro_servicos_rurais_v2';
-const SERVICOS_KEY_V1 = 'agro_servicos_rurais_v1';
+// Chaves principais e imutáveis para evitar qualquer perda em novas versões
+const PRODUTORES_MASTER_KEY = 'agro_produtores_rurais_master';
+const SERVICOS_MASTER_KEY = 'agro_servicos_rurais_master';
+
+// Chaves legadas para busca retroativa e migração automática
+const PRODUTORES_FALLBACK_KEYS = [
+  PRODUTORES_MASTER_KEY,
+  'agro_produtores_rurais_v1',
+  'agro_produtores_rurais_v2',
+  'agro_produtores_rurais',
+];
+
+const SERVICOS_FALLBACK_KEYS = [
+  SERVICOS_MASTER_KEY,
+  'agro_servicos_rurais_v2',
+  'agro_servicos_rurais_v1',
+  'agro_servicos_rurais',
+];
 
 const MAPA_SERVICOS_LEGADOS: Record<string, string> = {
   'Preparo de Solo e Gradagem': 'Grade Aradora',
@@ -26,68 +42,183 @@ const MAPA_SERVICOS_LEGADOS: Record<string, string> = {
   'Vistoria Fitossanitária': 'Batedor de Cereais (Feijão)',
 };
 
+/**
+ * Lê os produtores procurando primeiro na chave master e depois em todas as versões anteriores.
+ * Nunca substitui dados existentes do usuário por dados de demonstração.
+ */
 export function getStoredProdutores(): ProdutorRural[] {
   try {
-    const data = localStorage.getItem(PRODUTORES_KEY);
-    if (!data) {
-      localStorage.setItem(PRODUTORES_KEY, JSON.stringify(PRODUTORES_INICIAIS));
-      return PRODUTORES_INICIAIS;
+    for (const key of PRODUTORES_FALLBACK_KEYS) {
+      const data = localStorage.getItem(key);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Garante que está salvo na chave master
+          if (key !== PRODUTORES_MASTER_KEY) {
+            localStorage.setItem(PRODUTORES_MASTER_KEY, data);
+          }
+          return parsed;
+        }
+      }
     }
-    return JSON.parse(data);
+
+    // Apenas se for a primeira vez absoluta que o app é aberto
+    localStorage.setItem(PRODUTORES_MASTER_KEY, JSON.stringify(PRODUTORES_INICIAIS));
+    return PRODUTORES_INICIAIS;
   } catch (err) {
     console.error('Erro ao ler produtores do localStorage:', err);
     return PRODUTORES_INICIAIS;
   }
 }
 
+/**
+ * Salva simultaneamente no localStorage e no IndexedDB (sem limite de tamanho de fotos).
+ */
 export function saveStoredProdutores(produtores: ProdutorRural[]): void {
   try {
-    localStorage.setItem(PRODUTORES_KEY, JSON.stringify(produtores));
+    // 1. Salva no IndexedDB de forma assíncrona (suporta dezenas de MB de fotos em anexo)
+    idbSet('produtores_master', produtores);
+
+    // 2. Tenta salvar no localStorage com tratamento contra QuotaExceededError
+    try {
+      localStorage.setItem(PRODUTORES_MASTER_KEY, JSON.stringify(produtores));
+    } catch (quotaErr) {
+      console.warn('LocalStorage atingiu limite de quota. Salvando versão otimizada no IndexedDB:', quotaErr);
+      // Se estourar o localStorage devido às fotos em base64, salva os dados sem a foto no localStorage
+      // e mantém os dados completos com foto no IndexedDB
+      const produtoresLeves = produtores.map((p) => ({
+        ...p,
+        documentoFotoUrl: p.documentoFotoUrl && p.documentoFotoUrl.length > 50000 ? undefined : p.documentoFotoUrl,
+      }));
+      localStorage.setItem(PRODUTORES_MASTER_KEY, JSON.stringify(produtoresLeves));
+    }
   } catch (err) {
-    console.error('Erro ao salvar produtores:', err);
+    console.error('Erro ao persistir produtores:', err);
   }
 }
 
+/**
+ * Lê os serviços rurais procurando na chave master e em versões anteriores com migração automática.
+ */
 export function getStoredServicos(): SolicitacaoServico[] {
   try {
-    const data = localStorage.getItem(SERVICOS_KEY);
-    if (!data) {
-      // Migração suave se existia v1
-      const oldData = localStorage.getItem(SERVICOS_KEY_V1);
-      if (oldData) {
-        try {
-          const parsedOld: SolicitacaoServico[] = JSON.parse(oldData);
-          const migrated = parsedOld.map((s) => ({
+    for (const key of SERVICOS_FALLBACK_KEYS) {
+      const data = localStorage.getItem(key);
+      if (data) {
+        const parsed: SolicitacaoServico[] = JSON.parse(data);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const migrated = parsed.map((s) => ({
             ...s,
             tipoServico: MAPA_SERVICOS_LEGADOS[s.tipoServico] || s.tipoServico,
           }));
-          localStorage.setItem(SERVICOS_KEY, JSON.stringify(migrated));
+          if (key !== SERVICOS_MASTER_KEY) {
+            localStorage.setItem(SERVICOS_MASTER_KEY, JSON.stringify(migrated));
+          }
           return migrated;
-        } catch {
-          // fallback para inicial
         }
       }
-      localStorage.setItem(SERVICOS_KEY, JSON.stringify(SERVICOS_INICIAIS));
-      return SERVICOS_INICIAIS;
     }
-    return JSON.parse(data);
+
+    localStorage.setItem(SERVICOS_MASTER_KEY, JSON.stringify(SERVICOS_INICIAIS));
+    return SERVICOS_INICIAIS;
   } catch (err) {
     console.error('Erro ao ler serviços do localStorage:', err);
     return SERVICOS_INICIAIS;
   }
 }
 
+/**
+ * Salva os serviços rurais tanto no localStorage quanto no IndexedDB.
+ */
 export function saveStoredServicos(servicos: SolicitacaoServico[]): void {
   try {
-    localStorage.setItem(SERVICOS_KEY, JSON.stringify(servicos));
+    idbSet('servicos_master', servicos);
+    localStorage.setItem(SERVICOS_MASTER_KEY, JSON.stringify(servicos));
   } catch (err) {
     console.error('Erro ao salvar serviços:', err);
   }
 }
 
+/**
+ * Carrega a base persistente do IndexedDB (usada na inicialização assíncrona para recuperar fotos completas)
+ */
+export async function loadFromIndexedDB(): Promise<{
+  produtores?: ProdutorRural[];
+  servicos?: SolicitacaoServico[];
+} | null> {
+  try {
+    const idbProdutores = await idbGet<ProdutorRural[]>('produtores_master');
+    const idbServicos = await idbGet<SolicitacaoServico[]>('servicos_master');
+    if (idbProdutores || idbServicos) {
+      return {
+        produtores: idbProdutores && idbProdutores.length > 0 ? idbProdutores : undefined,
+        servicos: idbServicos && idbServicos.length > 0 ? idbServicos : undefined,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Exporta backup completo de todos os produtores, serviços e fotos como arquivo .json
+ */
+export function baixarArquivoBackup(
+  produtores: ProdutorRural[],
+  servicos: SolicitacaoServico[]
+): void {
+  const payload = {
+    sistema: 'AgroGestão Rural - Patrulha Agrícola',
+    versao: '2.0',
+    dataExportacao: new Date().toISOString(),
+    totalProdutores: produtores.length,
+    totalServicos: servicos.length,
+    produtores,
+    servicos,
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: 'application/json',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const hoje = new Date().toISOString().slice(0, 10);
+  a.download = `backup-agrogestao-${hoje}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Restaura um backup em formato JSON no sistema
+ */
+export function restaurarBackup(
+  jsonString: string
+): { produtores: ProdutorRural[]; servicos: SolicitacaoServico[] } {
+  const data = JSON.parse(jsonString);
+
+  if (!data || (!Array.isArray(data.produtores) && !Array.isArray(data.servicos))) {
+    throw new Error('Arquivo de backup inválido ou incompatível.');
+  }
+
+  const produtores: ProdutorRural[] = Array.isArray(data.produtores) ? data.produtores : [];
+  const servicos: SolicitacaoServico[] = Array.isArray(data.servicos) ? data.servicos : [];
+
+  // Salva imediatamente nas duas camadas
+  saveStoredProdutores(produtores);
+  saveStoredServicos(servicos);
+
+  return { produtores, servicos };
+}
+
 export function resetToDefaults(): { produtores: ProdutorRural[]; servicos: SolicitacaoServico[] } {
-  localStorage.setItem(PRODUTORES_KEY, JSON.stringify(PRODUTORES_INICIAIS));
-  localStorage.setItem(SERVICOS_KEY, JSON.stringify(SERVICOS_INICIAIS));
+  localStorage.setItem(PRODUTORES_MASTER_KEY, JSON.stringify(PRODUTORES_INICIAIS));
+  localStorage.setItem(SERVICOS_MASTER_KEY, JSON.stringify(SERVICOS_INICIAIS));
+  idbSet('produtores_master', PRODUTORES_INICIAIS);
+  idbSet('servicos_master', SERVICOS_INICIAIS);
   return { produtores: PRODUTORES_INICIAIS, servicos: SERVICOS_INICIAIS };
 }
 

@@ -7,12 +7,14 @@ import { ProducerFormModal } from './components/ProducerFormModal';
 import { ServiceFormModal } from './components/ServiceFormModal';
 import { DailyRemindersModal } from './components/DailyRemindersModal';
 import { ServiceDetailModal } from './components/ServiceDetailModal';
+import { BackupRestoreModal } from './components/BackupRestoreModal';
 import { ProdutorRural, SolicitacaoServico, StatusServico } from './types';
 import {
   getStoredProdutores,
   saveStoredProdutores,
   getStoredServicos,
   saveStoredServicos,
+  loadFromIndexedDB,
   verificarPendenciaProdutor,
   resetToDefaults,
 } from './utils/storage';
@@ -43,10 +45,25 @@ export default function App() {
   const [serviceDetailModalProdutor, setServiceDetailModalProdutor] = useState<ProdutorRural | undefined>(undefined);
 
   const [dailyRemindersOpen, setDailyRemindersOpen] = useState<boolean>(false);
+  const [backupModalOpen, setBackupModalOpen] = useState<boolean>(false);
   const [pushStatus, setPushStatus] = useState<PermissionStatus>(() => getNotificationPermission());
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  // Sincroniza persistência com localStorage
+  // Inicialização assíncrona: recupera dados persistentes do IndexedDB (incluindo imagens completas)
+  useEffect(() => {
+    loadFromIndexedDB().then((idbData) => {
+      if (idbData) {
+        if (idbData.produtores && idbData.produtores.length > 0) {
+          setProdutores(idbData.produtores);
+        }
+        if (idbData.servicos && idbData.servicos.length > 0) {
+          setServicos(idbData.servicos);
+        }
+      }
+    });
+  }, []);
+
+  // Sincroniza persistência com localStorage e IndexedDB
   useEffect(() => {
     saveStoredProdutores(produtores);
   }, [produtores]);
@@ -245,6 +262,7 @@ export default function App() {
         pendenciasCount={pendenciasCount}
         onOpenReminders={() => setDailyRemindersOpen(true)}
         onOpenNewService={() => handleOpenAddServico()}
+        onOpenBackup={() => setBackupModalOpen(true)}
         pushStatus={pushStatus}
       />
 
@@ -403,6 +421,23 @@ export default function App() {
           }}
           pushStatus={pushStatus}
           onPushStatusChange={(st) => setPushStatus(st)}
+        />
+      )}
+
+      {/* MODAL 6: Central de Backup e Segurança de Dados */}
+      {backupModalOpen && (
+        <BackupRestoreModal
+          isOpen={backupModalOpen}
+          onClose={() => setBackupModalOpen(false)}
+          produtores={produtores}
+          servicos={servicos}
+          onDataRestored={(novosProdutores, novosServicos) => {
+            setProdutores(novosProdutores);
+            setServicos(novosServicos);
+            setSelectedProdutor(null);
+            setServiceDetailModalServico(null);
+          }}
+          mostrarToast={mostrarToast}
         />
       )}
 
