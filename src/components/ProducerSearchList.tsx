@@ -13,6 +13,7 @@ import {
   Filter,
   ArrowRight,
   DollarSign,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { ProdutorRural, SolicitacaoServico } from '../types';
 import {
@@ -21,6 +22,7 @@ import {
   formatarCPF,
   normalizarTexto,
 } from '../utils/storage';
+import { exportarProdutoresCSV } from '../utils/exportCsv';
 
 interface ProducerSearchListProps {
   produtores: ProdutorRural[];
@@ -102,15 +104,27 @@ export const ProducerSearchList: React.FC<ProducerSearchListProps> = ({
             </p>
           </div>
 
-          <button
-            onClick={onOpenNovoProdutor}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all active:scale-95 shrink-0"
-            title="Cadastrar Novo Produtor"
-          >
-            <UserPlus className="w-4 h-4 text-emerald-200 shrink-0" />
-            <span className="hidden sm:inline">Novo Produtor</span>
-            <span className="sm:hidden">Novo</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => exportarProdutoresCSV(produtores, servicos)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition-all active:scale-95 shrink-0"
+              title="Exportar lista de produtores para planilha Excel / Sheets (.CSV)"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-700 shrink-0" />
+              <span className="hidden sm:inline">Exportar Planilha</span>
+              <span className="sm:hidden">Planilha</span>
+            </button>
+
+            <button
+              onClick={onOpenNovoProdutor}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all active:scale-95 shrink-0"
+              title="Cadastrar Novo Produtor"
+            >
+              <UserPlus className="w-4 h-4 text-emerald-200 shrink-0" />
+              <span className="hidden sm:inline">Novo Produtor</span>
+              <span className="sm:hidden">Novo</span>
+            </button>
+          </div>
         </div>
 
         {/* Campo de Busca Rápida com Ícones de Limpeza */}

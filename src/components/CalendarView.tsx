@@ -13,6 +13,7 @@ import {
   Search,
   Layers,
   Tractor,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { ProdutorRural, SolicitacaoServico, StatusServico, TIPOS_SERVICOS_DISPONIVEIS } from '../types';
 import {
@@ -23,6 +24,7 @@ import {
   formatarMoeda,
   getHojeStr,
 } from '../utils/storage';
+import { exportarServicosCSV } from '../utils/exportCsv';
 
 interface CalendarViewProps {
   produtores: ProdutorRural[];
@@ -196,6 +198,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <button
+            onClick={() => exportarServicosCSV(servicos, produtores)}
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 bg-emerald-950/60 hover:bg-emerald-950 text-white text-xs font-semibold rounded-xl border border-emerald-600/60 transition-all shadow-sm active:scale-95"
+            title="Exportar todos os serviços para planilha Excel / Sheets (.CSV)"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-300 shrink-0" />
+            <span className="hidden sm:inline">Exportar Planilha</span>
+            <span className="sm:hidden">Planilha</span>
+          </button>
+
           <button
             onClick={onOpenReminders}
             className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 bg-emerald-950/60 hover:bg-emerald-950 text-white text-xs font-semibold rounded-xl border border-emerald-600/60 transition-all shadow-sm active:scale-95"

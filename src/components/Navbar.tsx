@@ -116,12 +116,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                 id="btn-backup-dados"
                 onClick={onOpenBackup}
                 className="relative p-2 sm:px-2.5 sm:py-1.5 rounded-xl text-emerald-100 hover:bg-emerald-800/80 transition-all flex items-center gap-1.5 border border-emerald-700/60 bg-emerald-950/40 shadow-sm active:scale-95"
-                title="Backup e Segurança de Dados (Exportar / Importar JSON)"
-                aria-label="Backup e Segurança de Dados"
+                title="Backup de Segurança e Exportação de Dados (CSV / JSON)"
+                aria-label="Backup de Segurança e Exportação de Dados"
               >
                 <Database className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-emerald-300" />
-                <span className="hidden xl:inline text-xs font-semibold text-emerald-200">
-                  Backup
+                <span className="hidden sm:inline text-xs font-semibold text-emerald-200">
+                  Backup / Exportar
                 </span>
               </button>
 
