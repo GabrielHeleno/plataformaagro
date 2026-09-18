@@ -66,7 +66,7 @@ export function getStoredProdutores(): ProdutorRural[] {
     localStorage.setItem(PRODUTORES_MASTER_KEY, JSON.stringify(PRODUTORES_INICIAIS));
     return PRODUTORES_INICIAIS;
   } catch (err) {
-    console.error('Erro ao ler produtores do localStorage:', err);
+    console.warn('Aviso ao ler produtores do localStorage:', err);
     return PRODUTORES_INICIAIS;
   }
 }
@@ -93,7 +93,7 @@ export function saveStoredProdutores(produtores: ProdutorRural[]): void {
       localStorage.setItem(PRODUTORES_MASTER_KEY, JSON.stringify(produtoresLeves));
     }
   } catch (err) {
-    console.error('Erro ao persistir produtores:', err);
+    console.warn('Aviso ao persistir produtores:', err);
   }
 }
 
@@ -122,7 +122,7 @@ export function getStoredServicos(): SolicitacaoServico[] {
     localStorage.setItem(SERVICOS_MASTER_KEY, JSON.stringify(SERVICOS_INICIAIS));
     return SERVICOS_INICIAIS;
   } catch (err) {
-    console.error('Erro ao ler serviços do localStorage:', err);
+    console.warn('Aviso ao ler serviços do localStorage:', err);
     return SERVICOS_INICIAIS;
   }
 }
@@ -135,7 +135,7 @@ export function saveStoredServicos(servicos: SolicitacaoServico[]): void {
     idbSet('servicos_master', servicos);
     localStorage.setItem(SERVICOS_MASTER_KEY, JSON.stringify(servicos));
   } catch (err) {
-    console.error('Erro ao salvar serviços:', err);
+    console.warn('Aviso ao salvar serviços:', err);
   }
 }
 

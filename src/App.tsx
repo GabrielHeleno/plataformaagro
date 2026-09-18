@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
 import { CalendarView } from './components/CalendarView';
 import { WaitingListView } from './components/WaitingListView';
@@ -9,6 +9,7 @@ import { ServiceFormModal } from './components/ServiceFormModal';
 import { DailyRemindersModal } from './components/DailyRemindersModal';
 import { ServiceDetailModal } from './components/ServiceDetailModal';
 import { BackupRestoreModal } from './components/BackupRestoreModal';
+import { SheetsSyncModal } from './components/SheetsSyncModal';
 import { ProdutorRural, SolicitacaoServico, StatusServico } from './types';
 import {
   getStoredProdutores,
@@ -20,6 +21,13 @@ import {
   resetToDefaults,
   getHojeStr,
 } from './utils/storage';
+import {
+  getStoredSheetsUrl,
+  saveStoredSheetsUrl,
+  getStoredAutoSync,
+  fetchFromGoogleSheets,
+  sendToGoogleSheets,
+} from './utils/sheetsSync';
 import {
   getNotificationPermission,
   PermissionStatus,
@@ -48,6 +56,9 @@ export default function App() {
 
   const [dailyRemindersOpen, setDailyRemindersOpen] = useState<boolean>(false);
   const [backupModalOpen, setBackupModalOpen] = useState<boolean>(false);
+  const [sheetsModalOpen, setSheetsModalOpen] = useState<boolean>(false);
+  const [sheetsUrl, setSheetsUrl] = useState<string>(() => getStoredSheetsUrl());
+  const [isSheetsSyncing, setIsSheetsSyncing] = useState<boolean>(false);
   const [pushStatus, setPushStatus] = useState<PermissionStatus>(() => getNotificationPermission());
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -64,6 +75,82 @@ export default function App() {
       }
     });
   }, []);
+
+  // Envio automático em segundo plano para o Google Sheets quando houver alterações locais
+  const triggerSheetsPush = useCallback(
+    async (novosProdutores: ProdutorRural[], novosServicos: SolicitacaoServico[]) => {
+      const url = getStoredSheetsUrl();
+      if (!url || !getStoredAutoSync()) return;
+      try {
+        setIsSheetsSyncing(true);
+        await sendToGoogleSheets(url, novosProdutores, novosServicos);
+      } catch (err) {
+        console.warn('Falha na sincronização com Google Sheets:', err);
+      } finally {
+        setIsSheetsSyncing(false);
+      }
+    },
+    []
+  );
+
+  // Busca atualizações da planilha do Google Sheets (se alguém alterou no Sheets ou em outro aparelho)
+  const pullFromSheets = useCallback(
+    async (silent = false) => {
+      const url = getStoredSheetsUrl();
+      if (!url) return;
+      try {
+        setIsSheetsSyncing(true);
+        const res = await fetchFromGoogleSheets(url);
+        if (res.produtores.length > 0 || res.servicos.length > 0) {
+          setProdutores(res.produtores);
+          setServicos(res.servicos);
+          if (!silent) {
+            setToastMsg('Dados atualizados da planilha do Google Sheets!');
+            setTimeout(() => setToastMsg(null), 3500);
+          }
+        }
+      } catch (err: any) {
+        if (!silent) {
+          setToastMsg(`Erro ao sincronizar com Google Sheets: ${err.message}`);
+          setTimeout(() => setToastMsg(null), 4000);
+        }
+      } finally {
+        setIsSheetsSyncing(false);
+      }
+    },
+    []
+  );
+
+  // Sincronização inicial e periódica com Google Sheets
+  useEffect(() => {
+    const url = getStoredSheetsUrl();
+    if (url && getStoredAutoSync()) {
+      pullFromSheets(true);
+    }
+
+    // Polling a cada 40 segundos para detectar edições feitas diretamente no Google Sheets ou em outro aparelho
+    const interval = setInterval(() => {
+      const currentUrl = getStoredSheetsUrl();
+      if (currentUrl && getStoredAutoSync() && !document.hidden) {
+        pullFromSheets(true);
+      }
+    }, 40000);
+
+    // Sincroniza imediatamente quando o usuário volta para a aba do sistema
+    const handleFocus = () => {
+      const currentUrl = getStoredSheetsUrl();
+      if (currentUrl && getStoredAutoSync()) {
+        pullFromSheets(true);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [pullFromSheets]);
 
   // Sincroniza persistência com localStorage e IndexedDB
   useEffect(() => {
@@ -144,14 +231,17 @@ export default function App() {
 
   // Handlers para Produtores
   const handleSaveProdutor = (salvo: ProdutorRural) => {
+    let prodsAtualizados: ProdutorRural[] = [];
     setProdutores((prev) => {
       const index = prev.findIndex((p) => p.id === salvo.id);
       if (index >= 0) {
         const copy = [...prev];
         copy[index] = salvo;
+        prodsAtualizados = copy;
         return copy;
       }
-      return [salvo, ...prev];
+      prodsAtualizados = [salvo, ...prev];
+      return prodsAtualizados;
     });
 
     // Se o produtor salvo estiver atualmente em visualização detalhada, atualiza ele
@@ -162,6 +252,9 @@ export default function App() {
     setProducerFormOpen(false);
     setEditingProdutor(null);
     mostrarToast(`Produtor "${salvo.nomeCompleto}" salvo com sucesso!`);
+    
+    // Sincroniza com o Google Sheets se estiver conectado
+    triggerSheetsPush(prodsAtualizados, servicos);
   };
 
   const handleEditProdutor = (produtor: ProdutorRural) => {
@@ -171,14 +264,17 @@ export default function App() {
 
   // Handlers para Serviços
   const handleSaveServico = (salvo: SolicitacaoServico) => {
+    let servsAtualizados: SolicitacaoServico[] = [];
     setServicos((prev) => {
       const index = prev.findIndex((s) => s.id === salvo.id);
       if (index >= 0) {
         const copy = [...prev];
         copy[index] = salvo;
+        servsAtualizados = copy;
         return copy;
       }
-      return [salvo, ...prev];
+      servsAtualizados = [salvo, ...prev];
+      return servsAtualizados;
     });
 
     setServiceFormOpen(false);
@@ -186,6 +282,9 @@ export default function App() {
     setServiceFormFixedProdutorId(undefined);
     setServiceFormDataInicial(undefined);
     mostrarToast(`Solicitação de serviço ${salvo.id} salva com sucesso!`);
+
+    // Sincroniza com o Google Sheets se estiver conectado
+    triggerSheetsPush(produtores, servsAtualizados);
   };
 
   const handleOpenAddServico = (produtorId?: string, dataPrevia?: string) => {
@@ -207,8 +306,9 @@ export default function App() {
     novoStatus: StatusServico,
     extras?: { tempoServico?: string; valor?: number; dataConclusao?: string }
   ) => {
-    setServicos((prev) =>
-      prev.map((s) => {
+    let servsAtualizados: SolicitacaoServico[] = [];
+    setServicos((prev) => {
+      const updated = prev.map((s) => {
         if (s.id === servicoId) {
           return {
             ...s,
@@ -221,8 +321,10 @@ export default function App() {
           };
         }
         return s;
-      })
-    );
+      });
+      servsAtualizados = updated;
+      return updated;
+    });
     setServiceDetailModalServico((curr) => {
       if (curr && curr.id === servicoId) {
         return {
@@ -238,11 +340,22 @@ export default function App() {
       return curr;
     });
     mostrarToast(`Status do serviço ${servicoId} atualizado para "${novoStatus}".`);
+
+    // Sincroniza com o Google Sheets se estiver conectado
+    triggerSheetsPush(produtores, servsAtualizados);
   };
 
   const handleDeleteServico = (servicoId: string) => {
-    setServicos((prev) => prev.filter((s) => s.id !== servicoId));
+    let servsAtualizados: SolicitacaoServico[] = [];
+    setServicos((prev) => {
+      const filtrados = prev.filter((s) => s.id !== servicoId);
+      servsAtualizados = filtrados;
+      return filtrados;
+    });
     mostrarToast(`Solicitação de serviço removida.`);
+
+    // Sincroniza com o Google Sheets se estiver conectado
+    triggerSheetsPush(produtores, servsAtualizados);
   };
 
   const handleSelectServico = (servico: SolicitacaoServico, produtor?: ProdutorRural) => {
@@ -273,6 +386,9 @@ export default function App() {
         onOpenReminders={() => setDailyRemindersOpen(true)}
         onOpenNewService={() => handleOpenAddServico()}
         onOpenBackup={() => setBackupModalOpen(true)}
+        onOpenSheetsSync={() => setSheetsModalOpen(true)}
+        isSheetsConnected={Boolean(sheetsUrl && sheetsUrl.trim().length > 0)}
+        isSheetsSyncing={isSheetsSyncing}
         pushStatus={pushStatus}
       />
 
@@ -348,8 +464,12 @@ export default function App() {
       <footer className="bg-white border-t border-zinc-200 py-4 px-4 sm:px-8 text-xs text-zinc-500 mt-auto mb-16 sm:mb-0">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Sistema Integrado de Gestão Rural · Dados salvos localmente</span>
+            <ShieldCheck className={`w-4 h-4 ${sheetsUrl ? 'text-emerald-500' : 'text-emerald-600'}`} />
+            <span>
+              {sheetsUrl
+                ? 'Sincronização em tempo real ativa (Google Sheets conectado)'
+                : 'Sistema Integrado de Gestão Rural · Dados salvos localmente'}
+            </span>
           </div>
 
           <div className="flex items-center gap-4">
@@ -468,8 +588,29 @@ export default function App() {
             setServicos(novosServicos);
             setSelectedProdutor(null);
             setServiceDetailModalServico(null);
+            triggerSheetsPush(novosProdutores, novosServicos);
           }}
           mostrarToast={mostrarToast}
+        />
+      )}
+
+      {/* MODAL 7: Sincronização em Nuvem em Tempo Real (Google Sheets) */}
+      {sheetsModalOpen && (
+        <SheetsSyncModal
+          isOpen={sheetsModalOpen}
+          onClose={() => setSheetsModalOpen(false)}
+          produtores={produtores}
+          servicos={servicos}
+          onDataLoadedFromSheets={(novosProdutores, novosServicos) => {
+            setProdutores(novosProdutores);
+            setServicos(novosServicos);
+            setSelectedProdutor(null);
+            setServiceDetailModalServico(null);
+          }}
+          sheetsUrl={sheetsUrl}
+          setSheetsUrl={setSheetsUrl}
+          isSyncing={isSheetsSyncing}
+          setIsSyncing={setIsSheetsSyncing}
         />
       )}
 

@@ -252,9 +252,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         </div>
       </div>
 
-      {/* Previsão do Tempo (5 Dias) com Ícones e Chuva Numérica (CPTEC / INPE & ClimaTempo) */}
-      <WeatherWidget />
-
       {/* Barra de Controles: Navegação de Mês, Busca e Filtro de Status */}
       <div className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-zinc-200 space-y-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3">
@@ -525,8 +522,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-emerald-600" />
                 <h2 className="font-bold text-zinc-900 text-base">
-                  Agendamentos para {formatarDataBR(diaSelecionado)}
+                  {diaSelecionado === hojeStr ? 'Agendamentos de Hoje' : `Agendamentos para ${formatarDataBR(diaSelecionado)}`}
                 </h2>
+                {diaSelecionado === hojeStr && (
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Hoje
+                  </span>
+                )}
                 <span className="text-xs bg-zinc-100 text-zinc-700 font-medium px-2 py-0.5 rounded-full">
                   {servicosDoDiaSelecionado.length} {servicosDoDiaSelecionado.length === 1 ? 'registro' : 'registros'}
                 </span>
@@ -652,6 +654,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           )}
         </div>
       )}
+
+      {/* Previsão do Tempo (5 Dias) com Ícones e Chuva Numérica (CPTEC / INPE & ClimaTempo) - Posicionada por último na página */}
+      <WeatherWidget />
     </div>
   );
 };

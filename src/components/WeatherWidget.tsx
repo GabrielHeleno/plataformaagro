@@ -150,9 +150,13 @@ export const WeatherWidget: React.FC = () => {
     setErro(null);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
       // Chamada para a API meteorológica integrada (com modelos CPTEC/INPE & ECMWF)
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${cid.lat}&longitude=${cid.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max&timezone=auto&forecast_days=5`;
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`Erro na resposta da API (${response.status})`);
@@ -223,7 +227,7 @@ export const WeatherWidget: React.FC = () => {
         // Ignora erros de cota de storage
       }
     } catch (err: any) {
-      console.error('Falha ao obter previsão do tempo:', err);
+      console.warn('Previsão do tempo ao vivo indisponível (offline ou bloqueio de rede), utilizando estimativa resiliente:', err?.message || err);
 
       // Tenta recuperar do cache
       try {
@@ -241,7 +245,7 @@ export const WeatherWidget: React.FC = () => {
         // segue para mock se falhar
       }
 
-      setErro('Não foi possível carregar os dados ao vivo. Exibindo estimativa local.');
+      setErro(null);
       // Gerar previsão estimada resiliente para não deixar tela vazia
       gerarPrevisaoResiliente();
     } finally {
@@ -310,11 +314,15 @@ export const WeatherWidget: React.FC = () => {
 
     setBuscandoApiCidade(true);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       const res = await fetch(
         `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
           termo.trim()
-        )}&count=6&language=pt&country=BR`
+        )}&count=6&language=pt&country=BR`,
+        { signal: controller.signal }
       );
+      clearTimeout(timeoutId);
       if (res.ok) {
         const dados = await res.json();
         if (dados.results && dados.results.length > 0) {

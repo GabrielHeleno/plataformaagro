@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Users, UserPlus, Bell, Plus, Tractor, Database, Clock } from 'lucide-react';
+import { Calendar, Users, UserPlus, Bell, Plus, Tractor, Database, Clock, FileSpreadsheet, RefreshCw } from 'lucide-react';
 import { PermissionStatus } from '../utils/notifications';
 
 interface NavbarProps {
@@ -11,6 +11,9 @@ interface NavbarProps {
   onOpenReminders: () => void;
   onOpenNewService: () => void;
   onOpenBackup: () => void;
+  onOpenSheetsSync: () => void;
+  isSheetsConnected: boolean;
+  isSheetsSyncing: boolean;
   pushStatus: PermissionStatus;
 }
 
@@ -23,6 +26,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenReminders,
   onOpenNewService,
   onOpenBackup,
+  onOpenSheetsSync,
+  isSheetsConnected,
+  isSheetsSyncing,
 }) => {
   return (
     <>
@@ -137,8 +143,41 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             </nav>
 
-            {/* Ações Rápidas: Backup, Lembretes (Opcional no mobile) & Adicionar Serviço (Sem estourar a tela) */}
+            {/* Ações Rápidas: Sincronização em Nuvem (Sheets), Backup, Lembretes & Adicionar Serviço */}
             <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+              {/* Botão de Sincronização em Nuvem (Google Sheets) */}
+              <button
+                id="btn-sheets-sync"
+                onClick={onOpenSheetsSync}
+                className={`p-1.5 sm:p-2 rounded-xl transition-all flex items-center justify-center border shadow-xs active:scale-95 shrink-0 relative ${
+                  isSheetsConnected
+                    ? 'bg-emerald-800 text-emerald-100 border-emerald-500/80 hover:bg-emerald-700'
+                    : 'bg-emerald-950/40 text-emerald-200 hover:bg-emerald-800/80 border-emerald-700/60'
+                }`}
+                title={
+                  isSheetsSyncing
+                    ? 'Sincronizando com o Google Sheets...'
+                    : isSheetsConnected
+                    ? 'Google Sheets Conectado (Sincronização em tempo real ativa)'
+                    : 'Conectar Google Sheets para sincronizar entre celular e PC'
+                }
+                aria-label="Sincronização com Google Sheets"
+              >
+                {isSheetsSyncing ? (
+                  <RefreshCw className="w-4 h-4 text-amber-300 animate-spin shrink-0" />
+                ) : (
+                  <div className="relative flex items-center">
+                    <FileSpreadsheet className={`w-4 h-4 shrink-0 ${isSheetsConnected ? 'text-emerald-300' : 'text-emerald-400/80'}`} />
+                    {isSheetsConnected && (
+                      <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 shadow-xs ring-1 ring-emerald-900" />
+                    )}
+                  </div>
+                )}
+                <span className="hidden xl:inline text-xs font-semibold ml-1.5">
+                  {isSheetsConnected ? 'Planilha' : 'Conectar Planilha'}
+                </span>
+              </button>
+
               {/* Botão de Backup e Exportação (Apenas Ícone) */}
               <button
                 id="btn-backup-dados"
