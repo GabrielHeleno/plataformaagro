@@ -26,6 +26,7 @@ import {
 } from '../utils/storage';
 import { exportarServicosCSV } from '../utils/exportCsv';
 import { WeatherWidget } from './WeatherWidget';
+import { AgroMarketNewsWidget } from './AgroMarketNewsWidget';
 
 interface CalendarViewProps {
   produtores: ProdutorRural[];
@@ -655,8 +656,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         </div>
       )}
 
-      {/* Previsão do Tempo (5 Dias) com Ícones e Chuva Numérica (CPTEC / INPE & ClimaTempo) - Posicionada por último na página */}
+      {/* Previsão do Tempo (5 Dias) com Ícones e Chuva Numérica (CPTEC / INPE & ClimaTempo) */}
       <WeatherWidget />
+
+      {/* Bloco de Notícias, Newsletter e Cotações de Commodities do Mercado Agro */}
+      <AgroMarketNewsWidget />
     </div>
   );
 };
