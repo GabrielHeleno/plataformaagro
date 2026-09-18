@@ -257,15 +257,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             <span className="sm:hidden">Sicoobnet</span>
             <ExternalLink className="w-3 h-3 text-emerald-400/80 shrink-0" />
           </a>
-
-          <button
-            onClick={() => onAddServico(diaSelecionado || hojeStr)}
-            className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold rounded-xl shadow transition-all active:scale-95 border border-amber-400"
-            title="Agendar Novo Serviço"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>Agendar</span>
-          </button>
         </div>
       </div>
 
