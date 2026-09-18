@@ -27,6 +27,7 @@ import {
 import { exportarServicosCSV } from '../utils/exportCsv';
 import { WeatherWidget } from './WeatherWidget';
 import { AgroMarketNewsWidget } from './AgroMarketNewsWidget';
+import { OfficialAgroGazetteWidget } from './OfficialAgroGazetteWidget';
 
 interface CalendarViewProps {
   produtores: ProdutorRural[];
@@ -661,6 +662,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
       {/* Bloco de Notícias, Newsletter e Cotações de Commodities do Mercado Agro */}
       <AgroMarketNewsWidget />
+
+      {/* Bloco Separado: Publicações Oficiais no DOU, Imprensa Nacional e Agência Gov */}
+      <OfficialAgroGazetteWidget />
     </div>
   );
 };
