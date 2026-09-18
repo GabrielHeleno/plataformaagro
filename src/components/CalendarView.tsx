@@ -14,6 +14,8 @@ import {
   Layers,
   Tractor,
   FileSpreadsheet,
+  Barcode,
+  ExternalLink,
 } from 'lucide-react';
 import { ProdutorRural, SolicitacaoServico, StatusServico, TIPOS_SERVICOS_DISPONIVEIS } from '../types';
 import {
@@ -242,6 +244,19 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               {totalHoje}
             </span>
           </button>
+
+          <a
+            href="https://ib.sicoob.com.br/sicoobnet/ib/#/operador"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 bg-emerald-950/70 hover:bg-emerald-950 text-emerald-100 text-xs font-bold rounded-xl border border-emerald-500/60 transition-all shadow-sm active:scale-95 hover:text-white"
+            title="Acessar Sicoobnet para emissão de boletos de cobrança bancária"
+          >
+            <Barcode className="w-4 h-4 text-emerald-300 shrink-0" />
+            <span className="hidden sm:inline">Sicoobnet (Boletos)</span>
+            <span className="sm:hidden">Sicoobnet</span>
+            <ExternalLink className="w-3 h-3 text-emerald-400/80 shrink-0" />
+          </a>
 
           <button
             onClick={() => onAddServico(diaSelecionado || hojeStr)}
