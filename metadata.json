@@ -1,6 +1,6 @@
 {
-  "name": "Calendario Agricola",
-  "description": "Sistema de gestão de produtores rurais e calendário agrícola com previsão do tempo, cotações de commodities e notícias especializadas do agronegócio.",
+  "name": "Gestão de Produtores Rurais & Calendário Agrícola",
+  "description": "Sistema de gestão de produtores rurais, calendário agrícola, controle financeiro com alertas de pendência, previsão do tempo e diário oficial agro.",
   "requestFramePermissions": [
     "geolocation"
   ],

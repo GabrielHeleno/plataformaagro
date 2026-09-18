@@ -12,9 +12,14 @@ import {
   Trash2,
   CheckCircle,
   AlertCircle,
+  RefreshCw,
+  ShieldCheck,
 } from 'lucide-react';
 import { ProdutorRural } from '../types';
 import { formatarCPF, formatarTelefone } from '../utils/storage';
+import { compressDocumentImage, validateDocumentFile } from '../utils/documentStorage';
+import { getStoredSheetsUrl } from '../utils/sheetsSync';
+import { uploadDocumentToGoogleDrive, formatDriveDirectImageUrl, isPdfDocument } from '../utils/driveStorage';
 
 interface ProducerFormModalProps {
   produtorInicial?: ProdutorRural | null;
@@ -52,22 +57,73 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
 
   const [erro, setErro] = useState<string>('');
   const [obtendoGPS, setObtendoGPS] = useState<boolean>(false);
+  const [comprimindoFoto, setComprimindoFoto] = useState<boolean>(false);
+  const [infoFoto, setInfoFoto] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Manipulação de Upload de Imagem de Documento
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Manipulação de Upload de Imagem de Documento com validação anti-corrupção, compressão e envio ao Google Drive
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setErro('O arquivo deve ter no máximo 5MB.');
-        return;
+    if (!file) return;
+
+    // Validação estrita de arquivo, extensões maliciosas e tamanho para proteger memória e sistema
+    const validation = validateDocumentFile(file);
+    if (!validation.valid) {
+      setErro(validation.error || 'Arquivo inválido.');
+      if (e.target) e.target.value = '';
+      return;
+    }
+
+    try {
+      setComprimindoFoto(true);
+      setErro('');
+      setInfoFoto(validation.isPdf ? 'Lendo e validando arquivo PDF...' : 'Otimizando imagem mantendo nitidez...');
+      
+      // 1. Sempre realiza a compressão em canvas primeiro (ou leitura otimizada de PDF)
+      const { dataUrl, sizeKb, originalSizeKb, isPdf } = await compressDocumentImage(file);
+      
+      // 2. Verifica se o Google Apps Script (Sheets/Drive) está conectado
+      const sheetsUrl = getStoredSheetsUrl();
+      const ext = validation.fileExtension || (isPdf ? 'pdf' : 'jpg');
+      const safeProducerName = nomeCompleto ? nomeCompleto.replace(/[^a-zA-Z0-9]/g, '_') : 'produtor';
+      const fileName = `doc_${safeProducerName}_${Date.now()}.${ext}`;
+
+      if (sheetsUrl && sheetsUrl.startsWith('http')) {
+        setInfoFoto(
+          isPdf
+            ? `PDF pronto (${sizeKb} KB). Enviando para pasta no Google Drive...`
+            : `Comprimido: ${sizeKb} KB (original ${originalSizeKb} KB). Enviando para pasta no Google Drive...`
+        );
+        const driveResult = await uploadDocumentToGoogleDrive(sheetsUrl, dataUrl, fileName, nomeCompleto);
+        
+        if (driveResult.success && driveResult.directUrl) {
+          setDocumentoFotoUrl(driveResult.directUrl);
+          setInfoFoto(
+            isPdf
+              ? `PDF salvo com sucesso no Google Drive (${sizeKb} KB). Link direto configurado.`
+              : `Foto salva no Google Drive (${sizeKb} KB). Link direto gerado para a planilha.`
+          );
+        } else {
+          // Fallback: se o script do Drive retornar erro ou não estiver atualizado, mantém no banco local
+          setDocumentoFotoUrl(dataUrl);
+          setInfoFoto(`Salvo localmente (${sizeKb} KB). Nota: atualize o código Apps Script na planilha para salvar no Drive.`);
+        }
+      } else {
+        // Modo local (sem planilha conectada)
+        setDocumentoFotoUrl(dataUrl);
+        setInfoFoto(
+          isPdf
+            ? `Documento PDF salvo localmente (${sizeKb} KB).`
+            : `Documento otimizado: ${sizeKb} KB (original ${originalSizeKb} KB). Salvo localmente.`
+        );
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setDocumentoFotoUrl(reader.result as string);
-        setErro('');
-      };
-      reader.readAsDataURL(file);
+    } catch (err: any) {
+      console.warn('Erro ao processar documento:', err);
+      setErro(err.message || 'Não foi possível processar o documento. Verifique se o arquivo não está corrompido.');
+      setInfoFoto('');
+    } finally {
+      setComprimindoFoto(false);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -271,7 +327,7 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
                 <FileText className="w-4 h-4 text-emerald-700" />
                 <span>Cópia do Documento de Identidade (RG / CNH)</span>
               </span>
-              <span className="text-[11px] text-zinc-400 font-normal">PNG, JPG, SVG até 5MB</span>
+              <span className="text-[11px] text-zinc-500 font-normal">PDF, JPG, PNG ou WEBP (até 15MB)</span>
             </label>
 
             <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -279,17 +335,24 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
               <div className="w-32 h-24 rounded-lg border-2 border-dashed border-zinc-300 bg-white flex items-center justify-center overflow-hidden shrink-0 relative">
                 {documentoFotoUrl ? (
                   <>
-                    <img
-                      src={documentoFotoUrl}
-                      alt="Preview do Documento"
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
+                    {isPdfDocument(documentoFotoUrl) ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-red-50 text-red-700 p-2">
+                        <FileText className="w-8 h-8 text-red-600 mb-1" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Documento PDF</span>
+                      </div>
+                    ) : (
+                      <img
+                        src={formatDriveDirectImageUrl(documentoFotoUrl)}
+                        alt="Preview do Documento"
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
                     <button
                       type="button"
                       onClick={() => setDocumentoFotoUrl('')}
                       className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors shadow"
-                      title="Remover imagem"
+                      title="Remover anexo"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -297,7 +360,7 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
                 ) : (
                   <div className="text-center p-2 text-zinc-400">
                     <Image className="w-6 h-6 mx-auto mb-1 text-zinc-300" />
-                    <span className="text-[10px]">Sem cópia</span>
+                    <span className="text-[10px]">Sem anexo</span>
                   </div>
                 )}
               </div>
@@ -308,17 +371,22 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileUpload}
-                  accept="image/*"
+                  accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
                   className="hidden"
                 />
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-zinc-100 border border-zinc-300 rounded-lg font-bold text-zinc-700 shadow-xs transition-colors"
+                    disabled={comprimindoFoto}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-zinc-100 border border-zinc-300 rounded-lg font-bold text-zinc-700 shadow-xs transition-colors disabled:opacity-50"
                   >
-                    <Upload className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>Carregar Arquivo / Foto</span>
+                    {comprimindoFoto ? (
+                      <RefreshCw className="w-3.5 h-3.5 text-emerald-700 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5 text-emerald-700" />
+                    )}
+                    <span>{comprimindoFoto ? 'Validando e otimizando...' : 'Carregar Foto ou PDF'}</span>
                   </button>
 
                   <button
@@ -338,14 +406,23 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
                         <text x="125" y="145" fill="#0f172a" font-family="monospace" font-size="11">${cpf || '000.000.000-00'}</text>
                       </svg>`;
                       setDocumentoFotoUrl(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
+                      setInfoFoto('Cópia digital modelo gerada com sucesso.');
                     }}
                     className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg font-semibold transition-colors"
                   >
                     Gerar Cópia Digital Simulado
                   </button>
                 </div>
+
+                {infoFoto && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-800 bg-emerald-50/90 border border-emerald-200 px-2.5 py-1 rounded-md">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                    <span>{infoFoto}</span>
+                  </div>
+                )}
+
                 <p className="text-[11px] text-zinc-500">
-                  Anexe a digitalização ou foto do documento com foto legível do produtor.
+                  Armazenamento seguro com isolamento no IndexedDB. Fotos de celulares são comprimidas mantendo total nitidez.
                 </p>
               </div>
             </div>

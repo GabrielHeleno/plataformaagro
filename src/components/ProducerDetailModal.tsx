@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   AlertTriangle,
@@ -31,6 +31,8 @@ import {
   STATUS_CONFIG,
   LISTA_STATUS,
 } from '../utils/storage';
+import { getDocumentFile } from '../utils/documentStorage';
+import { formatDriveDirectImageUrl, isPdfDocument } from '../utils/driveStorage';
 
 interface ProducerDetailModalProps {
   produtor: ProdutorRural;
@@ -54,6 +56,21 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
   const [fotoModalAberta, setFotoModalAberta] = useState<boolean>(false);
   const [copiadoGeo, setCopiadoGeo] = useState<boolean>(false);
   const [filtroStatusHist, setFiltroStatusHist] = useState<string>('todos');
+  const [resolvedFotoUrl, setResolvedFotoUrl] = useState<string>(
+    produtor.documentoFotoUrl && !produtor.documentoFotoUrl.startsWith('idb:')
+      ? formatDriveDirectImageUrl(produtor.documentoFotoUrl)
+      : ''
+  );
+
+  useEffect(() => {
+    if (produtor.documentoFotoUrl && !produtor.documentoFotoUrl.startsWith('idb:')) {
+      setResolvedFotoUrl(formatDriveDirectImageUrl(produtor.documentoFotoUrl));
+    } else {
+      getDocumentFile(produtor.id).then((saved) => {
+        if (saved) setResolvedFotoUrl(formatDriveDirectImageUrl(saved));
+      });
+    }
+  }, [produtor.id, produtor.documentoFotoUrl]);
 
   // Serviços deste produtor
   const servicosProdutor = servicos.filter((s) => s.produtorId === produtor.id);
@@ -362,7 +379,7 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
                 )}
               </div>
 
-              {/* Coluna 3: Imagem da Cópia do Documento de Identidade */}
+              {/* Coluna 3: Imagem ou PDF da Cópia do Documento de Identidade */}
               <div className="border border-zinc-200 rounded-xl p-3 bg-zinc-50 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -370,34 +387,44 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
                       <FileText className="w-3.5 h-3.5 text-emerald-700" />
                       <span>Cópia do Documento</span>
                     </span>
-                    {produtor.documentoFotoUrl && (
+                    {resolvedFotoUrl && (
                       <button
                         onClick={() => setFotoModalAberta(true)}
                         className="text-[11px] font-bold text-emerald-700 hover:underline flex items-center gap-0.5"
                       >
                         <Maximize2 className="w-3 h-3" />
-                        <span>Ampliar</span>
+                        <span>{isPdfDocument(resolvedFotoUrl) ? 'Abrir PDF' : 'Ampliar'}</span>
                       </button>
                     )}
                   </div>
 
                   <div
-                    onClick={() => produtor.documentoFotoUrl && setFotoModalAberta(true)}
+                    onClick={() => resolvedFotoUrl && setFotoModalAberta(true)}
                     className="relative rounded-lg overflow-hidden border border-zinc-300 bg-white aspect-[4/3] flex items-center justify-center cursor-pointer group shadow-inner"
                   >
-                    {produtor.documentoFotoUrl ? (
-                      <>
-                        <img
-                          src={produtor.documentoFotoUrl}
-                          alt="Documento do Produtor"
-                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="absolute inset-0 bg-zinc-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium text-xs gap-1">
-                          <Maximize2 className="w-4 h-4" />
-                          <span>Clique para ampliar</span>
+                    {resolvedFotoUrl ? (
+                      isPdfDocument(resolvedFotoUrl) ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-red-50 text-red-700 p-3 text-center transition-transform group-hover:scale-105">
+                          <FileText className="w-10 h-10 text-red-600 mb-1" />
+                          <span className="text-xs font-bold uppercase tracking-wider">Documento PDF</span>
+                          <span className="text-[10px] text-red-500 mt-1 flex items-center gap-1">
+                            <Maximize2 className="w-3 h-3" /> Clique para abrir
+                          </span>
                         </div>
-                      </>
+                      ) : (
+                        <>
+                          <img
+                            src={resolvedFotoUrl}
+                            alt="Documento do Produtor"
+                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute inset-0 bg-zinc-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium text-xs gap-1">
+                            <Maximize2 className="w-4 h-4" />
+                            <span>Clique para ampliar</span>
+                          </div>
+                        </>
+                      )
                     ) : (
                       <div className="text-center p-4 text-zinc-400">
                         <FileText className="w-8 h-8 mx-auto mb-1" />
@@ -565,30 +592,59 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
         </div>
       </div>
 
-      {/* Modal de Zoom da Imagem do Documento */}
-      {fotoModalAberta && produtor.documentoFotoUrl && (
+      {/* Modal de Zoom da Imagem ou Visualizador de PDF do Documento */}
+      {fotoModalAberta && resolvedFotoUrl && (
         <div
           onClick={() => setFotoModalAberta(false)}
           className="fixed inset-0 z-60 bg-zinc-950/90 flex items-center justify-center p-4 cursor-pointer"
         >
-          <div className="relative max-w-2xl w-full bg-white rounded-xl p-2 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative max-w-3xl w-full bg-white rounded-xl p-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-2 border-b border-zinc-200 mb-2">
-              <span className="font-bold text-sm text-zinc-800">
-                Documento de Identidade - {produtor.nomeCompleto}
-              </span>
-              <button
-                onClick={() => setFotoModalAberta(false)}
-                className="p-1 rounded-md text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-emerald-700" />
+                <span className="font-bold text-sm text-zinc-800">
+                  Documento de Identidade - {produtor.nomeCompleto}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {resolvedFotoUrl.startsWith('http') && (
+                  <a
+                    href={resolvedFotoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Abrir em Nova Aba</span>
+                  </a>
+                )}
+                <button
+                  onClick={() => setFotoModalAberta(false)}
+                  className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-            <img
-              src={produtor.documentoFotoUrl}
-              alt="Cópia de documento em alta resolução"
-              className="w-full rounded-lg max-h-[80vh] object-contain"
-              referrerPolicy="no-referrer"
-            />
+
+            {isPdfDocument(resolvedFotoUrl) ? (
+              <div className="w-full h-[75vh] rounded-lg overflow-hidden border border-zinc-200 bg-zinc-100 flex flex-col">
+                <iframe
+                  src={resolvedFotoUrl}
+                  title="Documento PDF"
+                  className="w-full h-full border-0"
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center max-h-[80vh] overflow-auto">
+                <img
+                  src={resolvedFotoUrl}
+                  alt="Cópia de documento em alta resolução"
+                  className="w-full rounded-lg max-h-[75vh] object-contain"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

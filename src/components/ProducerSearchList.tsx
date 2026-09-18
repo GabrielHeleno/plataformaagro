@@ -23,6 +23,7 @@ import {
   normalizarTexto,
 } from '../utils/storage';
 import { exportarProdutoresCSV } from '../utils/exportCsv';
+import { formatDriveDirectImageUrl, isPdfDocument } from '../utils/driveStorage';
 
 interface ProducerSearchListProps {
   produtores: ProdutorRural[];
@@ -237,13 +238,20 @@ export const ProducerSearchList: React.FC<ProducerSearchListProps> = ({
                   <div className="flex items-start gap-3.5">
                     {/* Miniatura do Documento ou Avatar */}
                     <div className="w-14 h-14 rounded-lg bg-zinc-100 border border-zinc-200 shrink-0 overflow-hidden flex items-center justify-center relative shadow-inner group-hover:border-emerald-400 transition-colors">
-                      {produtor.documentoFotoUrl ? (
-                        <img
-                          src={produtor.documentoFotoUrl}
-                          alt="Documento do Produtor"
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
+                      {produtor.documentoFotoUrl && !produtor.documentoFotoUrl.startsWith('idb:') ? (
+                        isPdfDocument(produtor.documentoFotoUrl) ? (
+                          <div className="w-full h-full bg-red-50 text-red-600 flex flex-col items-center justify-center p-1">
+                            <FileText className="w-6 h-6" />
+                            <span className="text-[9px] font-black uppercase">PDF</span>
+                          </div>
+                        ) : (
+                          <img
+                            src={formatDriveDirectImageUrl(produtor.documentoFotoUrl)}
+                            alt="Documento do Produtor"
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        )
                       ) : (
                         <FileText className="w-7 h-7 text-zinc-400" />
                       )}

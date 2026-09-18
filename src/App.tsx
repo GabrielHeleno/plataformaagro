@@ -61,19 +61,27 @@ export default function App() {
   const [isSheetsSyncing, setIsSheetsSyncing] = useState<boolean>(false);
   const [pushStatus, setPushStatus] = useState<PermissionStatus>(() => getNotificationPermission());
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [isStorageInitialized, setIsStorageInitialized] = useState<boolean>(false);
 
-  // Inicialização assíncrona: recupera dados persistentes do IndexedDB (incluindo imagens completas)
+  // Inicialização assíncrona: recupera dados persistentes do IndexedDB primeiro (incluindo imagens completas)
   useEffect(() => {
-    loadFromIndexedDB().then((idbData) => {
-      if (idbData) {
-        if (idbData.produtores && idbData.produtores.length > 0) {
-          setProdutores(idbData.produtores);
+    loadFromIndexedDB()
+      .then((idbData) => {
+        if (idbData) {
+          if (idbData.produtores && idbData.produtores.length > 0) {
+            setProdutores(idbData.produtores);
+          }
+          if (idbData.servicos && idbData.servicos.length > 0) {
+            setServicos(idbData.servicos);
+          }
         }
-        if (idbData.servicos && idbData.servicos.length > 0) {
-          setServicos(idbData.servicos);
-        }
-      }
-    });
+      })
+      .catch((err) => {
+        console.warn('Aviso ao inicializar dados do IndexedDB:', err);
+      })
+      .finally(() => {
+        setIsStorageInitialized(true);
+      });
   }, []);
 
   // Envio automático em segundo plano para o Google Sheets quando houver alterações locais
@@ -102,7 +110,23 @@ export default function App() {
         setIsSheetsSyncing(true);
         const res = await fetchFromGoogleSheets(url);
         if (res.produtores.length > 0 || res.servicos.length > 0) {
-          setProdutores(res.produtores);
+          // Merge seguro: se a planilha tiver documento vazio ou indicador '[FOTO_ARMAZENADA_LOCAL]',
+          // PRESERVA a cópia local do documento em alta resolução para nunca perder fotos
+          setProdutores((prevProdutores) => {
+            return res.produtores.map((novoP) => {
+              const localP = prevProdutores.find((p) => p.id === novoP.id);
+              if (
+                localP &&
+                localP.documentoFotoUrl &&
+                (!novoP.documentoFotoUrl ||
+                  novoP.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]' ||
+                  novoP.documentoFotoUrl.startsWith('idb:'))
+              ) {
+                return { ...novoP, documentoFotoUrl: localP.documentoFotoUrl };
+              }
+              return novoP;
+            });
+          });
           setServicos(res.servicos);
           if (!silent) {
             setToastMsg('Dados atualizados da planilha do Google Sheets!');
@@ -152,14 +176,17 @@ export default function App() {
     };
   }, [pullFromSheets]);
 
-  // Sincroniza persistência com localStorage e IndexedDB
+  // Sincroniza persistência com localStorage e IndexedDB SOMENTE após inicialização concluída
+  // Isso impede que a renderização inicial sobrescreva dados reais do IndexedDB!
   useEffect(() => {
+    if (!isStorageInitialized) return;
     saveStoredProdutores(produtores);
-  }, [produtores]);
+  }, [produtores, isStorageInitialized]);
 
   useEffect(() => {
+    if (!isStorageInitialized) return;
     saveStoredServicos(servicos);
-  }, [servicos]);
+  }, [servicos, isStorageInitialized]);
 
   // Se o usuário clicar na aba "novo-produtor", abre o modal
   useEffect(() => {

@@ -416,6 +416,69 @@ function doPost(e) {
   try {
     var contents = e.postData.contents;
     var data = JSON.parse(contents);
+
+    // Se for ação de upload de documento diretamente para o Google Drive
+    if (data.action === "uploadDocument" && data.fileData) {
+      var folderName = "AgroGestao_Documentos";
+      var folder = getOrCreateFolder(folderName);
+
+      // Decodifica a mídia Base64
+      var rawData = data.fileData;
+      var contentType = "image/jpeg";
+      if (rawData.indexOf("data:") === 0) {
+        var commaIdx = rawData.indexOf(",");
+        var header = rawData.substring(5, commaIdx);
+        var semiIdx = header.indexOf(";");
+        if (semiIdx !== -1) {
+          contentType = header.substring(0, semiIdx);
+        }
+        rawData = rawData.substring(commaIdx + 1);
+      }
+
+      // Bloqueio de segurança no servidor Google Drive: rejeita extensões e MIME types maliciosos
+      var safeName = (data.fileName || ("doc_" + new Date().getTime() + ".jpg")).replace(/[^a-zA-Z0-9._-]/g, "_");
+      var nameParts = safeName.split(".");
+      var ext = nameParts.length > 1 ? nameParts[nameParts.length - 1].toLowerCase() : "jpg";
+      var allowedExts = ["jpg", "jpeg", "png", "webp", "pdf"];
+      
+      if (allowedExts.indexOf(ext) === -1) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          message: "Formato de arquivo não permitido pelo Google Drive: ." + ext
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // Define contentType adequado se for PDF
+      if (ext === "pdf" || contentType.indexOf("pdf") !== -1) {
+        contentType = "application/pdf";
+      }
+
+      var decoded = Utilities.base64Decode(rawData);
+      var blob = Utilities.newBlob(decoded, contentType, safeName);
+      var file = folder.createFile(blob);
+
+      // Permite visualização pública da imagem para que o link direto funcione no app e no Sheets
+      try {
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (shareErr) {
+        // Ignora se o domínio corporativo restringir
+      }
+
+      var fileId = file.getId();
+      var directUrl = ext === "pdf" 
+        ? "https://drive.google.com/file/d/" + fileId + "/view"
+        : "https://lh3.googleusercontent.com/d/" + fileId;
+      var viewUrl = file.getUrl();
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "Documento salvo com sucesso no Google Drive!",
+        fileId: fileId,
+        directUrl: directUrl,
+        viewUrl: viewUrl
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     
     var pSheet = getOrCreateSheet(ss, "Produtores", getProdutoresHeaders());
@@ -445,6 +508,14 @@ function doPost(e) {
       message: err.toString()
     })).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+function getOrCreateFolder(folderName) {
+  var folders = DriveApp.getFoldersByName(folderName);
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  return DriveApp.createFolder(folderName);
 }
 
 function getProdutoresHeaders() {

@@ -211,10 +211,10 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
-                Sincronização em Tempo Real (Google Planilhas)
+                Sincronização Nuvem (Google Planilhas & Google Drive)
               </h2>
               <p className="text-xs text-emerald-200">
-                Acesse os mesmos dados no celular e no computador simultaneamente
+                Planilha no Sheets e fotos comprimidas salvas na pasta do Google Drive
               </p>
             </div>
           </div>
@@ -481,7 +481,7 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
                 </span>
                 <div>
                   <strong>Copie a URL gerada</strong> (terminada em <code>/exec</code>) e cole no campo acima!
-                  Pronto: ao salvar no celular ou no computador, ambos estarão 100% sincronizados.
+                  Pronto: ao salvar ou anexar fotos de documentos, o script criará automaticamente a pasta <strong>AgroGestao_Documentos</strong> no seu Google Drive, salvará as imagens comprimidas nela e inserirá os links diretos na coluna de Foto da sua planilha.
                 </div>
               </li>
             </ol>

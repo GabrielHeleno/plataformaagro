@@ -17,7 +17,7 @@ import {
   Info,
 } from 'lucide-react';
 import { ProdutorRural, SolicitacaoServico } from '../types';
-import { restaurarBackup } from '../utils/storage';
+import { restaurarBackup, buscarDadosParaRecuperacao } from '../utils/storage';
 import {
   exportarProdutoresCSV,
   exportarServicosCSV,
@@ -175,6 +175,36 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
 
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  // Busca e recuperação automática de dados perdidos em snapshots ou chaves históricas
+  const handleBuscarDadosPerdidos = async () => {
+    setIsProcessing(true);
+    setStatusMsg(null);
+    try {
+      const dadosRecuperados = await buscarDadosParaRecuperacao();
+      if (dadosRecuperados && (dadosRecuperados.produtores.length > 0 || dadosRecuperados.servicos.length > 0)) {
+        onDataRestored(dadosRecuperados.produtores, dadosRecuperados.servicos);
+        setStatusMsg({
+          type: 'success',
+          text: `Base recuperada com sucesso de "${dadosRecuperados.origem}"! ${dadosRecuperados.produtores.length} produtor(es) e ${dadosRecuperados.servicos.length} serviço(s) restaurados.`,
+        });
+        mostrarToast('Dados históricos recuperados com sucesso!');
+      } else {
+        setStatusMsg({
+          type: 'error',
+          text: 'Nenhum histórico anterior encontrado para recuperação automática neste navegador.',
+        });
+      }
+    } catch (err) {
+      console.error('Erro na recuperação automática:', err);
+      setStatusMsg({
+        type: 'error',
+        text: 'Não foi possível concluir a busca por dados históricos.',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -412,7 +442,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
               {isProcessing ? (
                 <>
                   <RefreshCw className="w-3.5 h-3.5 animate-spin text-zinc-600" />
-                  <span>Restaurando dados...</span>
+                  <span>Processando...</span>
                 </>
               ) : (
                 <>
@@ -421,6 +451,19 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
                 </>
               )}
             </button>
+
+            {/* Recuperação de Emergência de Snapshots e Chaves Anteriores */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={handleBuscarDadosPerdidos}
+                disabled={isProcessing}
+                className="w-full py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 active:scale-98 disabled:opacity-50"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Buscar e Restaurar Cópia de Segurança Automática (Anti-Erro)</span>
+              </button>
+            </div>
           </div>
 
           {/* Dica para o GitHub Pages */}
