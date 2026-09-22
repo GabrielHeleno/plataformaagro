@@ -52,10 +52,20 @@ export function isGoogleDriveUrl(url: string): boolean {
 export function isPdfDocument(urlOrData: string): boolean {
   if (!urlOrData) return false;
   const lower = urlOrData.toLowerCase();
-  return lower.startsWith('data:application/pdf') || lower.includes('.pdf');
+  return (
+    lower.startsWith('data:application/pdf') ||
+    lower.includes('.pdf') ||
+    lower.includes('type=pdf') ||
+    lower.includes('#pdf')
+  );
 }
 
-export function formatDriveDirectImageUrl(rawUrl: string): string {
+/**
+ * Converte qualquer link do Google Drive para a URL de imagem direta ideal para a tag <img>.
+ * Retorna o endpoint de imagem binária (thumbnail oficial de alta resolução do Google Drive).
+ * NUNCA retorna páginas HTML (/view ou /preview) no src de imagens!
+ */
+export function formatDriveDirectImageUrl(rawUrl: string, size = 1600): string {
   if (!rawUrl) return '';
   const trimmed = rawUrl.trim();
 
@@ -68,14 +78,50 @@ export function formatDriveDirectImageUrl(rawUrl: string): string {
   const fileId = extractDriveFileId(trimmed);
 
   if (fileId) {
-    // Se for PDF do Drive, retorna o link de visualização embedável ou em aba
-    if (trimmed.includes('.pdf') || trimmed.includes('/view') || trimmed.includes('/preview')) {
-      return `https://drive.google.com/file/d/${fileId}/preview`;
-    }
-    // Para imagens, lh3.googleusercontent.com/d/FILE_ID é o formato mais rápido e estável para <img>
-    return `https://lh3.googleusercontent.com/d/${fileId}`;
+    // Para renderização em tag <img>, usa o endpoint oficial de imagem do Google Drive
+    // que serve binário de imagem diretamente sem redirecionar para visualizador HTML
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${size}`;
   }
 
+  return trimmed;
+}
+
+/**
+ * URL alternativa de imagem direta via googleusercontent para fallback em <img>
+ */
+export function formatDriveAlternativeImageUrl(rawUrl: string): string {
+  if (!rawUrl) return '';
+  const trimmed = rawUrl.trim();
+  const fileId = extractDriveFileId(trimmed);
+  if (fileId) {
+    return `https://lh3.googleusercontent.com/d/${fileId}`;
+  }
+  return trimmed;
+}
+
+/**
+ * Retorna o link oficial para abrir o arquivo no Google Drive em nova aba do navegador
+ */
+export function getDriveWebLink(rawUrl: string): string {
+  if (!rawUrl) return '';
+  const trimmed = rawUrl.trim();
+  const fileId = extractDriveFileId(trimmed);
+  if (fileId) {
+    return `https://drive.google.com/file/d/${fileId}/view?usp=sharing`;
+  }
+  return trimmed;
+}
+
+/**
+ * Retorna o link de preview adequado para <iframe> (usado somente para visualização embedada de PDFs)
+ */
+export function getDrivePreviewEmbedUrl(rawUrl: string): string {
+  if (!rawUrl) return '';
+  const trimmed = rawUrl.trim();
+  const fileId = extractDriveFileId(trimmed);
+  if (fileId) {
+    return `https://drive.google.com/file/d/${fileId}/preview`;
+  }
   return trimmed;
 }
 

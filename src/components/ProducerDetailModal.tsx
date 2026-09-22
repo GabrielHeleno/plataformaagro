@@ -33,7 +33,14 @@ import {
   LISTA_STATUS,
 } from '../utils/storage';
 import { getDocumentFile } from '../utils/documentStorage';
-import { formatDriveDirectImageUrl, isPdfDocument, isGoogleDriveUrl } from '../utils/driveStorage';
+import {
+  formatDriveDirectImageUrl,
+  isPdfDocument,
+  isGoogleDriveUrl,
+  getDriveWebLink,
+  getDrivePreviewEmbedUrl,
+} from '../utils/driveStorage';
+import { DocumentImage } from './DocumentImage';
 
 interface ProducerDetailModalProps {
   produtor: ProdutorRural;
@@ -63,7 +70,7 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
     produtor.documentoFotoUrl !== '[FOTO_ARMAZENADA_LOCAL]';
 
   const [resolvedFotoUrl, setResolvedFotoUrl] = useState<string>(
-    temFotoDireta ? formatDriveDirectImageUrl(produtor.documentoFotoUrl) : ''
+    temFotoDireta ? produtor.documentoFotoUrl : ''
   );
 
   useEffect(() => {
@@ -72,10 +79,10 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
       !produtor.documentoFotoUrl.startsWith('idb:') &&
       produtor.documentoFotoUrl !== '[FOTO_ARMAZENADA_LOCAL]'
     ) {
-      setResolvedFotoUrl(formatDriveDirectImageUrl(produtor.documentoFotoUrl));
+      setResolvedFotoUrl(produtor.documentoFotoUrl);
     } else {
       getDocumentFile(produtor.id).then((saved) => {
-        if (saved) setResolvedFotoUrl(formatDriveDirectImageUrl(saved));
+        if (saved) setResolvedFotoUrl(saved);
         else setResolvedFotoUrl('');
       });
     }
@@ -422,11 +429,10 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
                         </div>
                       ) : (
                         <>
-                          <img
+                          <DocumentImage
                             src={resolvedFotoUrl}
                             alt="Documento do Produtor"
                             className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                            referrerPolicy="no-referrer"
                           />
                           <div className="absolute inset-0 bg-zinc-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium text-xs gap-1">
                             <Maximize2 className="w-4 h-4" />
@@ -451,7 +457,7 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
                         <span>Salvo no Google Drive</span>
                       </span>
                       <a
-                        href={resolvedFotoUrl}
+                        href={getDriveWebLink(resolvedFotoUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-700 hover:text-blue-900 font-bold flex items-center gap-0.5 hover:underline"
@@ -461,8 +467,8 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
-                    <span className="text-[10px] text-blue-700 block truncate font-mono bg-white/80 px-1.5 py-0.5 rounded border border-blue-100" title={resolvedFotoUrl}>
-                      {resolvedFotoUrl}
+                    <span className="text-[10px] text-blue-700 block truncate font-mono bg-white/80 px-1.5 py-0.5 rounded border border-blue-100" title={getDriveWebLink(resolvedFotoUrl)}>
+                      {getDriveWebLink(resolvedFotoUrl)}
                     </span>
                   </div>
                 ) : (
@@ -640,9 +646,9 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {resolvedFotoUrl.startsWith('http') && (
+                {resolvedFotoUrl && (
                   <a
-                    href={resolvedFotoUrl}
+                    href={getDriveWebLink(resolvedFotoUrl)}
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200"
@@ -663,18 +669,17 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
             {isPdfDocument(resolvedFotoUrl) ? (
               <div className="w-full h-[75vh] rounded-lg overflow-hidden border border-zinc-200 bg-zinc-100 flex flex-col">
                 <iframe
-                  src={resolvedFotoUrl}
+                  src={getDrivePreviewEmbedUrl(resolvedFotoUrl)}
                   title="Documento PDF"
                   className="w-full h-full border-0"
                 />
               </div>
             ) : (
               <div className="flex items-center justify-center max-h-[80vh] overflow-auto">
-                <img
+                <DocumentImage
                   src={resolvedFotoUrl}
                   alt="Cópia de documento em alta resolução"
                   className="w-full rounded-lg max-h-[75vh] object-contain"
-                  referrerPolicy="no-referrer"
                 />
               </div>
             )}

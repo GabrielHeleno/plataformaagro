@@ -23,7 +23,8 @@ import {
   normalizarTexto,
 } from '../utils/storage';
 import { exportarProdutoresCSV } from '../utils/exportCsv';
-import { formatDriveDirectImageUrl, isPdfDocument } from '../utils/driveStorage';
+import { isPdfDocument } from '../utils/driveStorage';
+import { DocumentImage } from './DocumentImage';
 
 interface ProducerSearchListProps {
   produtores: ProdutorRural[];
@@ -463,11 +464,10 @@ export const ProducerSearchList: React.FC<ProducerSearchListProps> = ({
                             <span className="text-[9px] font-black uppercase">PDF</span>
                           </div>
                         ) : (
-                          <img
-                            src={formatDriveDirectImageUrl(produtor.documentoFotoUrl)}
+                          <DocumentImage
+                            src={produtor.documentoFotoUrl}
                             alt="Documento do Produtor"
                             className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
                           />
                         )
                       ) : (

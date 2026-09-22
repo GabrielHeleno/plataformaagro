@@ -21,7 +21,14 @@ import { ProdutorRural } from '../types';
 import { formatarCPF, formatarTelefone } from '../utils/storage';
 import { compressDocumentImage, validateDocumentFile, getDocumentFile, saveDocumentFile, removeDocumentFile } from '../utils/documentStorage';
 import { getStoredSheetsUrl } from '../utils/sheetsSync';
-import { uploadDocumentToGoogleDrive, formatDriveDirectImageUrl, isPdfDocument, isGoogleDriveUrl } from '../utils/driveStorage';
+import {
+  uploadDocumentToGoogleDrive,
+  formatDriveDirectImageUrl,
+  isPdfDocument,
+  isGoogleDriveUrl,
+  getDriveWebLink,
+} from '../utils/driveStorage';
+import { DocumentImage } from './DocumentImage';
 
 interface ProducerFormModalProps {
   produtorInicial?: ProdutorRural | null;
@@ -377,11 +384,10 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
                         <span className="text-[10px] font-bold uppercase tracking-wider">Documento PDF</span>
                       </div>
                     ) : (
-                      <img
-                        src={formatDriveDirectImageUrl(documentoFotoUrl)}
+                      <DocumentImage
+                        src={documentoFotoUrl}
                         alt="Preview do Documento"
                         className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
                       />
                     )}
                     <button
@@ -464,7 +470,7 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
                       <span className="font-semibold truncate">Link do Google Drive (gravado na célula da planilha):</span>
                     </div>
                     <a
-                      href={documentoFotoUrl}
+                      href={getDriveWebLink(documentoFotoUrl)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:text-blue-900 hover:underline shrink-0"
