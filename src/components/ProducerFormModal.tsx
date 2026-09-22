@@ -14,12 +14,14 @@ import {
   AlertCircle,
   RefreshCw,
   ShieldCheck,
+  ExternalLink,
+  Cloud,
 } from 'lucide-react';
 import { ProdutorRural } from '../types';
 import { formatarCPF, formatarTelefone } from '../utils/storage';
 import { compressDocumentImage, validateDocumentFile, getDocumentFile, saveDocumentFile, removeDocumentFile } from '../utils/documentStorage';
 import { getStoredSheetsUrl } from '../utils/sheetsSync';
-import { uploadDocumentToGoogleDrive, formatDriveDirectImageUrl, isPdfDocument } from '../utils/driveStorage';
+import { uploadDocumentToGoogleDrive, formatDriveDirectImageUrl, isPdfDocument, isGoogleDriveUrl } from '../utils/driveStorage';
 
 interface ProducerFormModalProps {
   produtorInicial?: ProdutorRural | null;
@@ -105,8 +107,8 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
       if (sheetsUrl && sheetsUrl.startsWith('http')) {
         setInfoFoto(
           isPdf
-            ? `PDF pronto (${sizeKb} KB). Enviando para pasta no Google Drive...`
-            : `Comprimido: ${sizeKb} KB (original ${originalSizeKb} KB). Enviando para pasta no Google Drive...`
+            ? `PDF pronto (${sizeKb} KB). Salvando no Google Drive...`
+            : `Comprimido: ${sizeKb} KB (original ${originalSizeKb} KB). Salvando no Google Drive...`
         );
         const driveResult = await uploadDocumentToGoogleDrive(sheetsUrl, dataUrl, fileName, nomeCompleto);
         
@@ -114,21 +116,23 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
           setDocumentoFotoUrl(driveResult.directUrl);
           setInfoFoto(
             isPdf
-              ? `PDF salvo com sucesso no Google Drive (${sizeKb} KB). Link direto configurado.`
-              : `Foto salva no Google Drive (${sizeKb} KB). Link direto gerado para a planilha.`
+              ? `PDF salvo na pasta AgroGestao_Documentos do Google Drive. Link direto gerado para a planilha.`
+              : `Foto salva no Google Drive com sucesso! O link direto do arquivo será gravado na célula da planilha.`
           );
         } else {
           // Fallback: se o script do Drive retornar erro ou não estiver atualizado, mantém no banco local
           setDocumentoFotoUrl(dataUrl);
-          setInfoFoto(`Salvo localmente (${sizeKb} KB). Nota: atualize o código Apps Script na planilha para salvar no Drive.`);
+          setInfoFoto(
+            `Arquivo salvo no banco local (${sizeKb} KB). Atenção: no Google Apps Script, execute a função 'autorizarAcessoAoGoogleDrive' para permitir salvar direto no Drive.`
+          );
         }
       } else {
         // Modo local (sem planilha conectada)
         setDocumentoFotoUrl(dataUrl);
         setInfoFoto(
           isPdf
-            ? `Documento PDF salvo localmente (${sizeKb} KB).`
-            : `Documento otimizado: ${sizeKb} KB (original ${originalSizeKb} KB). Salvo localmente.`
+            ? `Documento PDF salvo localmente (${sizeKb} KB). Conecte a planilha para enviar à pasta do Google Drive.`
+            : `Documento otimizado: ${sizeKb} KB. Salvo localmente.`
         );
       }
     } catch (err: any) {
@@ -436,14 +440,32 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
                 </div>
 
                 {infoFoto && (
-                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-800 bg-emerald-50/90 border border-emerald-200 px-2.5 py-1 rounded-md">
+                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-800 bg-emerald-50/90 border border-emerald-200 px-2.5 py-1.5 rounded-md">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
                     <span>{infoFoto}</span>
                   </div>
                 )}
 
+                {documentoFotoUrl && isGoogleDriveUrl(documentoFotoUrl) && (
+                  <div className="flex items-center justify-between gap-2 p-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Cloud className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span className="font-semibold truncate">Link do Google Drive (gravado na célula da planilha):</span>
+                    </div>
+                    <a
+                      href={documentoFotoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:text-blue-900 hover:underline shrink-0"
+                    >
+                      <span>Abrir no Drive</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
+
                 <p className="text-[11px] text-zinc-500">
-                  Armazenamento seguro com isolamento no IndexedDB. Fotos de celulares são comprimidas mantendo total nitidez.
+                  Os documentos são salvos na pasta <strong>AgroGestao_Documentos</strong> do seu Google Drive e o link direto oficial é preenchido automaticamente na coluna da planilha.
                 </p>
               </div>
             </div>

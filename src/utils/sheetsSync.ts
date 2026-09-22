@@ -257,11 +257,19 @@ export async function fetchFromGoogleSheets(webappUrl: string): Promise<{
 /**
  * Envia todos os dados cadastrados no AgroGestão para a planilha do Google Sheets.
  */
+import { sincronizarFotosComGoogleDrive } from './driveStorage';
+
+/**
+ * Envia todos os dados cadastrados no AgroGestão para a planilha do Google Sheets.
+ * Garante que todas as fotos de documentos sejam salvas na pasta do Google Drive
+ * e que a célula da planilha receba EXCLUSIVAMENTE o link direto do arquivo no Google Drive.
+ */
 export async function sendToGoogleSheets(
   webappUrl: string,
   produtores: ProdutorRural[],
-  servicos: SolicitacaoServico[]
-): Promise<{ status: string; message: string; timestamp: string }> {
+  servicos: SolicitacaoServico[],
+  onPhotoProgress?: (atual: number, total: number, produtorNome: string) => void
+): Promise<{ status: string; message: string; timestamp: string; produtoresAtualizados?: ProdutorRural[] }> {
   if (!webappUrl || !webappUrl.startsWith('http')) {
     throw new Error('URL do Google Apps Script inválida ou não configurada.');
   }
@@ -277,12 +285,28 @@ export async function sendToGoogleSheets(
     };
   }
 
-  // Otimização: para não estourar os limites de payload em planilhas,
-  // mantemos fotos leves ou referências na planilha
-  const produtoresParaEnvio = produtores.map((p) => ({
-    ...p,
-    documentoFotoUrl: p.documentoFotoUrl && p.documentoFotoUrl.length > 50000 ? '[FOTO_ARMAZENADA_LOCAL]' : p.documentoFotoUrl,
-  }));
+  // ETAPA 1: Garante que qualquer foto local/base64 seja salva no Google Drive antes do envio
+  let produtoresTratados = [...produtores];
+  try {
+    const syncDriveRes = await sincronizarFotosComGoogleDrive(webappUrl, produtoresTratados, onPhotoProgress);
+    produtoresTratados = syncDriveRes.produtoresAtualizados;
+  } catch (driveErr) {
+    console.warn('Aviso na sincronização prévia com o Google Drive:', driveErr);
+  }
+
+  // ETAPA 2: Prepara produtores para a planilha.
+  // Célula do Sheets receberá EXCLUSIVAMENTE o link do Google Drive (ou link web).
+  // Nunca grava tags locais ou texto de controle como "[FOTO_ARMAZENADA_LOCAL]".
+  const produtoresParaEnvio = produtoresTratados.map((p) => {
+    let fotoUrl = p.documentoFotoUrl || '';
+    if (fotoUrl === '[FOTO_ARMAZENADA_LOCAL]' || fotoUrl.startsWith('idb:')) {
+      fotoUrl = '';
+    }
+    return {
+      ...p,
+      documentoFotoUrl: fotoUrl,
+    };
+  });
 
   const payload = {
     action: 'saveAll',
@@ -296,7 +320,7 @@ export async function sendToGoogleSheets(
   // Tentativa 1: POST padrão com Content-Type text/plain simples (evita preflight OPTIONS)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 9000);
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     const response = await fetch(webappUrl, {
       method: 'POST',
@@ -315,16 +339,27 @@ export async function sendToGoogleSheets(
       if (result.status === 'error') {
         throw new Error(result.message || 'Erro reportado pelo script ao salvar.');
       }
+
+      // Se o Google Apps Script salvou fotos extras no Drive e retornou URLs
+      if (result.produtoresUrls && typeof result.produtoresUrls === 'object') {
+        produtoresTratados = produtoresTratados.map((p) => {
+          if (result.produtoresUrls[p.id]) {
+            return { ...p, documentoFotoUrl: result.produtoresUrls[p.id] };
+          }
+          return p;
+        });
+      }
+
       saveStoredLastSync(now);
       return {
         status: 'success',
-        message: result.message || 'Dados atualizados no Google Sheets com sucesso!',
+        message: result.message || 'Dados e links do Google Drive atualizados no Google Sheets com sucesso!',
         timestamp: now,
+        produtoresAtualizados: produtoresTratados,
       };
     }
   } catch (postErr: any) {
     // Tentativa 2: Modo no-cors caso o redirecionamento 302 do Google perca cabeçalhos CORS
-    // O Apps Script executa normalmente e persiste as alterações na planilha
     try {
       await fetch(webappUrl, {
         method: 'POST',
@@ -340,6 +375,7 @@ export async function sendToGoogleSheets(
         status: 'success',
         message: 'Dados enviados para a planilha do Google Sheets com sucesso.',
         timestamp: now,
+        produtoresAtualizados: produtoresTratados,
       };
     } catch {
       throw new Error(
@@ -354,6 +390,7 @@ export async function sendToGoogleSheets(
     status: 'success',
     message: 'Dados salvos com sucesso na planilha.',
     timestamp: now,
+    produtoresAtualizados: produtoresTratados,
   };
 }
 
@@ -362,28 +399,46 @@ export async function sendToGoogleSheets(
  */
 export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * =========================================================================
- * AGROGESTÃO RURAL - SCRIPT DE SINCRONIZAÇÃO EM NUVEM (GOOGLE SHEETS)
+ * AGROGESTÃO RURAL - SINCRONIZAÇÃO EM NUVEM (GOOGLE SHEETS & GOOGLE DRIVE)
  * =========================================================================
- * Este script conecta sua planilha ao AgroGestão Rural no computador e no celular.
- * Qualquer alteração feita no AgroGestão salva na planilha, e qualquer edição
- * feita na planilha é carregada no AgroGestão!
+ * Este script sincroniza sua planilha ao AgroGestão Rural e salva todas
+ * as fotos e documentos anexados diretamente na pasta 'AgroGestao_Documentos'
+ * do seu Google Drive, gravando na planilha somente o link oficial do arquivo.
  * 
- * COMO INSTALAR EM 1 MINUTO:
- * 1. Abra uma planilha em branco no Google Planilhas (https://sheets.new)
+ * INSTRUÇÕES SIMPLES DE INSTALAÇÃO (1 A 2 MINUTOS):
+ * -------------------------------------------------------------------------
+ * 1. Abra sua planilha no Google Planilhas (https://sheets.new)
  * 2. No menu superior da planilha, clique em: Extensões > Apps Script
  * 3. Apague todo o conteúdo que estiver na janela e COLE este script completo
- * 4. Clique no ícone de "Salvar" (disquete) ou pressione Ctrl+S
- * 5. No canto superior direito, clique no botão azul "Implantar" > "Nova implantação"
- * 6. Na janela que abrir, clique na engrenagem ao lado de "Selecione o tipo" e escolha:
- *    "App da Web" (Web App)
- * 7. Configure EXATAMENTE assim:
- *    - Descrição: AgroGestao Sync
- *    - Executar como: Eu (seu e-mail)
- *    - Quem pode acessar: Qualquer pessoa (Anyone) -> Permite que seu celular e PC sincronizem sem bloqueios
- * 8. Clique em "Implantar", autorize o acesso com sua conta Google
- * 9. COPIE a "URL do app da Web" gerada (termina com /exec) e cole no AgroGestão!
+ * 4. Salve o código (ícone de disquete ou Ctrl+S)
+ * 5. AUTORIZE O GOOGLE DRIVE (IMPORTANTE):
+ *    - Na barra superior, localize o menu suspenso de funções (onde diz "doGet" ou "doPost")
+ *    - Selecione a função: autorizarAcessoAoGoogleDrive
+ *    - Clique no botão "Executar" (ícone de Play ▶)
+ *    - O Google exibirá a tela "Autorização necessária". Clique em:
+ *      Revisar permissões > Escolha sua conta > Avançado > Acessar (não seguro) > Permitir.
+ * 6. IMPLANTE O WEB APP:
+ *    - No canto superior direito, clique em "Implantar" > "Nova implantação"
+ *    - Se já tiver uma implantação, clique em "Gerenciar implantações" > ícone do lápis (Editar) > Versão: "Nova versão"
+ *    - Configure EXATAMENTE assim:
+ *      * Tipo: App da Web (Web app)
+ *      * Descrição: AgroGestao Drive & Sheets
+ *      * Executar como: Eu (seu e-mail)
+ *      * Quem pode acessar: Qualquer pessoa (Anyone)
+ * 7. Clique em "Implantar" e COPIE a "URL do app da Web" (termina com /exec)
+ * 8. Cole a URL no AgroGestão no menu "Planilha & Drive"!
  * =========================================================================
  */
+
+/**
+ * Função de autorização de 1 clique para o Google Drive.
+ * Execute esta função manualmente no editor do Apps Script para conceder permissão ao DriveApp.
+ */
+function autorizarAcessoAoGoogleDrive() {
+  var pasta = getOrCreateFolder("AgroGestao_Documentos");
+  Logger.log("Sucesso! Pasta do Google Drive pronta. ID: " + pasta.getId() + " - Nome: " + pasta.getName());
+  return "Autorizado com sucesso! Pasta: " + pasta.getName();
+}
 
 function doGet(e) {
   try {
@@ -428,75 +483,33 @@ function doPost(e) {
     var contents = e.postData.contents;
     var data = JSON.parse(contents);
 
-    // Se for ação de upload de documento diretamente para o Google Drive
+    // Ação: Upload de documento diretamente para a pasta do Google Drive
     if (data.action === "uploadDocument" && data.fileData) {
-      var folderName = "AgroGestao_Documentos";
-      var folder = getOrCreateFolder(folderName);
+      var folder = getOrCreateFolder("AgroGestao_Documentos");
+      var driveLink = salvarMidiaNoGoogleDrive(data.fileData, data.fileName || ("doc_" + new Date().getTime()), folder);
 
-      // Decodifica a mídia Base64
-      var rawData = data.fileData;
-      var contentType = "image/jpeg";
-      if (rawData.indexOf("data:") === 0) {
-        var commaIdx = rawData.indexOf(",");
-        var header = rawData.substring(5, commaIdx);
-        var semiIdx = header.indexOf(";");
-        if (semiIdx !== -1) {
-          contentType = header.substring(0, semiIdx);
-        }
-        rawData = rawData.substring(commaIdx + 1);
-      }
-
-      // Bloqueio de segurança no servidor Google Drive: rejeita extensões e MIME types maliciosos
-      var safeName = (data.fileName || ("doc_" + new Date().getTime() + ".jpg")).replace(/[^a-zA-Z0-9._-]/g, "_");
-      var nameParts = safeName.split(".");
-      var ext = nameParts.length > 1 ? nameParts[nameParts.length - 1].toLowerCase() : "jpg";
-      var allowedExts = ["jpg", "jpeg", "png", "webp", "pdf"];
-      
-      if (allowedExts.indexOf(ext) === -1) {
+      if (driveLink) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success",
+          message: "Arquivo salvo com sucesso na pasta do Google Drive!",
+          directUrl: driveLink,
+          viewUrl: driveLink
+        })).setMimeType(ContentService.MimeType.JSON);
+      } else {
         return ContentService.createTextOutput(JSON.stringify({
           status: "error",
-          message: "Formato de arquivo não permitido pelo Google Drive: ." + ext
+          message: "Falha ao gravar arquivo no Google Drive. Execute a função 'autorizarAcessoAoGoogleDrive' no Apps Script."
         })).setMimeType(ContentService.MimeType.JSON);
       }
-
-      // Define contentType adequado se for PDF
-      if (ext === "pdf" || contentType.indexOf("pdf") !== -1) {
-        contentType = "application/pdf";
-      }
-
-      var decoded = Utilities.base64Decode(rawData);
-      var blob = Utilities.newBlob(decoded, contentType, safeName);
-      var file = folder.createFile(blob);
-
-      // Permite visualização pública da imagem para que o link direto funcione no app e no Sheets
-      try {
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      } catch (shareErr) {
-        // Ignora se o domínio corporativo restringir
-      }
-
-      var fileId = file.getId();
-      var directUrl = ext === "pdf" 
-        ? "https://drive.google.com/file/d/" + fileId + "/view"
-        : "https://lh3.googleusercontent.com/d/" + fileId;
-      var viewUrl = file.getUrl();
-
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "success",
-        message: "Documento salvo com sucesso no Google Drive!",
-        fileId: fileId,
-        directUrl: directUrl,
-        viewUrl: viewUrl
-      })).setMimeType(ContentService.MimeType.JSON);
     }
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    
     var pSheet = getOrCreateSheet(ss, "Produtores", getProdutoresHeaders());
     var sSheet = getOrCreateSheet(ss, "Servicos", getServicosHeaders());
     
+    var updatedUrls = {};
     if (data.produtores && Array.isArray(data.produtores) && data.produtores.length > 0) {
-      writeProdutores(pSheet, data.produtores);
+      updatedUrls = writeProdutores(pSheet, data.produtores);
     }
     
     if (data.servicos && Array.isArray(data.servicos) && data.servicos.length > 0) {
@@ -508,7 +521,8 @@ function doPost(e) {
       message: "Dados sincronizados com sucesso no Google Sheets!",
       timestamp: new Date().toISOString(),
       totalProdutores: data.produtores ? data.produtores.length : 0,
-      totalServicos: data.servicos ? data.servicos.length : 0
+      totalServicos: data.servicos ? data.servicos.length : 0,
+      produtoresUrls: updatedUrls
     };
     
     return ContentService.createTextOutput(JSON.stringify(output))
@@ -518,6 +532,45 @@ function doPost(e) {
       status: "error",
       message: err.toString()
     })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * Salva imagem ou PDF diretamente na pasta do Google Drive e retorna o link direto
+ */
+function salvarMidiaNoGoogleDrive(fileData, fileNameBase, optFolder) {
+  try {
+    if (!fileData || fileData.indexOf("data:") !== 0) return "";
+    var folder = optFolder || getOrCreateFolder("AgroGestao_Documentos");
+    
+    var commaIdx = fileData.indexOf(",");
+    var header = fileData.substring(5, commaIdx);
+    var semiIdx = header.indexOf(";");
+    var contentType = semiIdx !== -1 ? header.substring(0, semiIdx) : "image/jpeg";
+    var rawData = fileData.substring(commaIdx + 1);
+
+    var isPdf = contentType.indexOf("pdf") !== -1 || (fileNameBase && fileNameBase.toLowerCase().indexOf(".pdf") !== -1);
+    var ext = isPdf ? "pdf" : "jpg";
+    var safeName = (fileNameBase ? fileNameBase.replace(/[^a-zA-Z0-9._-]/g, "_") : "doc") + "_" + (new Date().getTime()) + "." + ext;
+
+    var decoded = Utilities.base64Decode(rawData);
+    var blob = Utilities.newBlob(decoded, contentType, safeName);
+    var file = folder.createFile(blob);
+
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (shareErr) {
+      Logger.log("Aviso de compartilhamento: " + shareErr);
+    }
+
+    var fileId = file.getId();
+    // Link direto do Google Drive
+    return isPdf
+      ? "https://drive.google.com/file/d/" + fileId + "/view"
+      : "https://lh3.googleusercontent.com/d/" + fileId;
+  } catch (err) {
+    Logger.log("Erro ao salvar arquivo no Google Drive: " + err);
+    return "";
   }
 }
 
@@ -588,7 +641,7 @@ function readProdutores(sheet) {
       areaCultivada: parseFloat(String(r[9] || '0').replace(',', '.')) || 0,
       observacoes: String(r[10] || '').trim(),
       dataCadastro: formatarDataIso(r[11]),
-      documentoFotoUrl: String(r[12] || '')
+      documentoFotoUrl: String(r[12] || '').trim()
     });
   }
   return list;
@@ -624,15 +677,34 @@ function readServicos(sheet) {
 }
 
 function writeProdutores(sheet, produtores) {
-  // Trava de segurança: impede que chamadas vazias ou acidentais limpem a planilha existente
-  if (!produtores || !Array.isArray(produtores) || produtores.length === 0) return;
+  if (!produtores || !Array.isArray(produtores) || produtores.length === 0) return {};
 
   var lastRow = sheet.getLastRow();
   if (lastRow > 1) {
     sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
   }
   
+  var folder = null;
+  var updatedUrls = {};
+
   var matrix = produtores.map(function(p) {
+    var docUrl = String(p.documentoFotoUrl || '').trim();
+
+    // Se o produtor tem foto em Base64, salva no Google Drive agora e grava o link na célula
+    if (docUrl.indexOf('data:') === 0) {
+      if (!folder) folder = getOrCreateFolder("AgroGestao_Documentos");
+      var driveLink = salvarMidiaNoGoogleDrive(docUrl, (p.nomeCompleto || 'produtor') + '_' + p.id, folder);
+      if (driveLink) {
+        docUrl = driveLink;
+        updatedUrls[p.id] = driveLink;
+      } else {
+        docUrl = '';
+      }
+    } else if (docUrl === '[FOTO_ARMAZENADA_LOCAL]' || docUrl.indexOf('idb:') === 0) {
+      // Nunca grava texto de controle na planilha
+      docUrl = '';
+    }
+
     return [
       p.id || '',
       p.nomeCompleto || '',
@@ -646,15 +718,15 @@ function writeProdutores(sheet, produtores) {
       p.areaCultivada || 0,
       p.observacoes || '',
       p.dataCadastro || '',
-      (p.documentoFotoUrl && p.documentoFotoUrl.length < 2000) ? p.documentoFotoUrl : ''
+      docUrl
     ];
   });
   
   sheet.getRange(2, 1, matrix.length, matrix[0].length).setValues(matrix);
+  return updatedUrls;
 }
 
 function writeServicos(sheet, servicos) {
-  // Trava de segurança: impede que chamadas vazias limpem a planilha existente
   if (!servicos || !Array.isArray(servicos) || servicos.length === 0) return;
 
   var lastRow = sheet.getLastRow();

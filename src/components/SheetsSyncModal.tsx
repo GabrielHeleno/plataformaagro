@@ -13,6 +13,8 @@ import {
   Zap,
   Info,
   Unlink,
+  Cloud,
+  Image,
 } from 'lucide-react';
 import {
   GOOGLE_APPS_SCRIPT_CODE,
@@ -24,6 +26,7 @@ import {
   fetchFromGoogleSheets,
   sendToGoogleSheets,
 } from '../utils/sheetsSync';
+import { sincronizarFotosComGoogleDrive } from '../utils/driveStorage';
 import { ProdutorRural, SolicitacaoServico } from '../types';
 
 interface SheetsSyncModalProps {
@@ -52,6 +55,7 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
   const [urlInput, setUrlInput] = useState(sheetsUrl || getStoredSheetsUrl());
   const [copiedScript, setCopiedScript] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [photoProgress, setPhotoProgress] = useState<string>('');
   const [autoSync, setAutoSync] = useState(getStoredAutoSync());
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(getStoredLastSync());
   const [showScriptViewer, setShowScriptViewer] = useState(false);
@@ -114,11 +118,14 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
           text: `Conexão estabelecida com sucesso! Carregados ${result.produtores.length} produtores e ${result.servicos.length} serviços da planilha.`,
         });
       } else {
-        // Se a planilha estiver vazia, sobe os dados locais para lá
-        await sendToGoogleSheets(trimmed, produtores, servicos);
+        // Se a planilha estiver vazia, sobe os dados locais e sincroniza fotos com o Drive
+        const pushRes = await sendToGoogleSheets(trimmed, produtores, servicos);
+        if (pushRes.produtoresAtualizados) {
+          onDataLoadedFromSheets(pushRes.produtoresAtualizados, servicos);
+        }
         setStatusMessage({
           type: 'success',
-          text: `Conectado com sucesso! Seus ${produtores.length} produtores e ${servicos.length} serviços locais foram enviados para a planilha.`,
+          text: `Conectado com sucesso! Seus ${produtores.length} produtores e ${servicos.length} serviços foram salvos na planilha com fotos no Google Drive.`,
         });
       }
     } catch (err: any) {
@@ -157,13 +164,23 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
   const handleManualPush = async () => {
     if (!sheetsUrl) return;
     setIsSyncing(true);
-    setStatusMessage({ type: 'info', text: 'Enviando todos os dados locais para a planilha...' });
+    setStatusMessage({ type: 'info', text: 'Enviando todos os dados e sincronizando fotos com o Google Drive...' });
     try {
-      const result = await sendToGoogleSheets(sheetsUrl, produtores, servicos);
+      const result = await sendToGoogleSheets(
+        sheetsUrl,
+        produtores,
+        servicos,
+        (atual, total, nome) => {
+          setPhotoProgress(`Salvando no Google Drive: ${atual} de ${total} (${nome})...`);
+        }
+      );
+      if (result.produtoresAtualizados) {
+        onDataLoadedFromSheets(result.produtoresAtualizados, servicos);
+      }
       setLastSyncTime(result.timestamp);
       setStatusMessage({
         type: 'success',
-        text: 'Planilha atualizada com sucesso com todos os dados atuais da plataforma!',
+        text: 'Planilha atualizada com sucesso! Todas as fotos foram salvas na pasta do Google Drive e as células receberam os links oficiais.',
       });
     } catch (err: any) {
       setStatusMessage({
@@ -172,6 +189,44 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
       });
     } finally {
       setIsSyncing(false);
+      setPhotoProgress('');
+    }
+  };
+
+  const handleSincronizarApenasFotos = async () => {
+    if (!sheetsUrl) return;
+    setIsSyncing(true);
+    setStatusMessage({ type: 'info', text: 'Verificando fotos locais para enviar à pasta do Google Drive...' });
+    try {
+      const driveRes = await sincronizarFotosComGoogleDrive(
+        sheetsUrl,
+        produtores,
+        (atual, total, nome) => {
+          setPhotoProgress(`Enviando foto ${atual} de ${total}: ${nome} para o Drive...`);
+        }
+      );
+      if (driveRes.fotosEnviadas > 0) {
+        onDataLoadedFromSheets(driveRes.produtoresAtualizados, servicos);
+        // Atualiza a planilha com os links recém-gerados
+        await sendToGoogleSheets(sheetsUrl, driveRes.produtoresAtualizados, servicos);
+        setStatusMessage({
+          type: 'success',
+          text: `Sucesso! ${driveRes.fotosEnviadas} foto(s) foram enviadas para a pasta do Google Drive e a planilha foi preenchida com os links!`,
+        });
+      } else {
+        setStatusMessage({
+          type: 'info',
+          text: 'Todas as fotos de documentos já estão salvas no Google Drive com os links diretos na planilha.',
+        });
+      }
+    } catch (err: any) {
+      setStatusMessage({
+        type: 'error',
+        text: `Erro na sincronização de fotos com o Drive: ${err.message}`,
+      });
+    } finally {
+      setIsSyncing(false);
+      setPhotoProgress('');
     }
   };
 
@@ -243,9 +298,28 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
               {statusMessage.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />}
               {statusMessage.type === 'error' && <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />}
               {statusMessage.type === 'info' && <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />}
-              <div className="flex-1 font-medium leading-relaxed">{statusMessage.text}</div>
+              <div className="flex-1">
+                <div className="font-medium leading-relaxed">{statusMessage.text}</div>
+                {photoProgress && (
+                  <div className="mt-1.5 font-semibold text-emerald-800 flex items-center gap-1.5 text-[11px]">
+                    <RefreshCw className="w-3 h-3 animate-spin text-emerald-700" />
+                    <span>{photoProgress}</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
+
+          {/* Destaque Importante de Autorização do Google Drive */}
+          <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-950 space-y-1.5">
+            <div className="flex items-center gap-2 font-bold text-blue-900">
+              <Cloud className="w-4 h-4 text-blue-600" />
+              <span>Como salvar as fotos na pasta do seu Google Drive:</span>
+            </div>
+            <p className="text-[11px] text-blue-800 leading-relaxed">
+              No editor do <strong>Google Apps Script</strong> da sua planilha, selecione a função <strong>autorizarAcessoAoGoogleDrive</strong> no menu suspenso superior e clique em <strong>Executar (▶)</strong> uma vez. Isso autoriza o script a criar a pasta <em>AgroGestao_Documentos</em> no seu Drive e salvar as fotos de documentos com os links diretos oficiais nas células da planilha.
+            </p>
+          </div>
 
           {/* Cartão de Status da Conexão */}
           <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4">
@@ -293,7 +367,7 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
             {/* Ações quando conectado */}
             {sheetsUrl && (
               <div className="pt-3 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                   <button
                     onClick={handleManualFetch}
                     disabled={isSyncing}
@@ -303,7 +377,7 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
                     <div>
                       <span className="block font-bold">Puxar do Sheets</span>
                       <span className="text-[10px] text-emerald-700 font-normal">
-                        Atualiza a tela com alterações feitas no Sheets
+                        Atualiza com a planilha
                       </span>
                     </div>
                   </button>
@@ -315,9 +389,23 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
                   >
                     <UploadCloud className="w-4 h-4 text-amber-700 shrink-0" />
                     <div>
-                      <span className="block font-bold">Enviar para o Sheets</span>
+                      <span className="block font-bold">Salvar no Sheets</span>
                       <span className="text-[10px] text-amber-700 font-normal">
-                        Salva todos os cadastros atuais na planilha
+                        Grava dados e fotos no Drive
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={handleSincronizarApenasFotos}
+                    disabled={isSyncing}
+                    className="flex items-center justify-center gap-2 p-2.5 bg-blue-50 hover:bg-blue-100/80 text-blue-900 font-semibold rounded-lg border border-blue-200 transition-all text-left"
+                  >
+                    <Cloud className="w-4 h-4 text-blue-700 shrink-0" />
+                    <div>
+                      <span className="block font-bold">Subir Fotos ao Drive</span>
+                      <span className="text-[10px] text-blue-700 font-normal">
+                        Gera links na planilha
                       </span>
                     </div>
                   </button>
@@ -454,23 +542,15 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
               )}
 
               <li className="flex items-start gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-emerald-700 text-white font-black flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                <span className="w-5 h-5 rounded-full bg-blue-700 text-white font-black flex items-center justify-center text-[10px] shrink-0 mt-0.5">
                   3
                 </span>
                 <div>
-                  <strong>Implante como App da Web:</strong>
+                  <strong>Autorize o Acesso ao Google Drive (Importante para salvar as fotos):</strong>
                   <ul className="list-disc list-inside mt-1 space-y-0.5 text-zinc-600 text-[11px]">
-                    <li>Clique em <strong>Salvar</strong> (ícone de disquete).</li>
-                    <li>Clique no botão azul <strong>Implantar &gt; Nova implantação</strong>.</li>
-                    <li>Selecione o tipo <strong>App da Web</strong> (na engrenagem).</li>
-                    <li>
-                      Em <em>Executar como</em>: escolha <strong>Eu</strong>.
-                    </li>
-                    <li>
-                      Em <em>Quem pode acessar</em>: escolha{' '}
-                      <strong className="text-emerald-800">Qualquer pessoa (Anyone)</strong>.
-                    </li>
-                    <li>Clique em <strong>Implantar</strong> e autorize o acesso com sua conta Google.</li>
+                    <li>No menu suspenso de funções da barra superior do Apps Script, selecione <strong>autorizarAcessoAoGoogleDrive</strong>.</li>
+                    <li>Clique no botão <strong>Executar (▶)</strong> uma vez.</li>
+                    <li>O Google solicitará autorização. Clique em: <em>Revisar permissões &gt; Selecione sua conta &gt; Avançado &gt; Acessar (não seguro) &gt; Permitir</em>.</li>
                   </ul>
                 </div>
               </li>
@@ -480,8 +560,30 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
                   4
                 </span>
                 <div>
-                  <strong>Copie a URL gerada</strong> (terminada em <code>/exec</code>) e cole no campo acima!
-                  Pronto: ao salvar ou anexar fotos de documentos, o script criará automaticamente a pasta <strong>AgroGestao_Documentos</strong> no seu Google Drive, salvará as imagens comprimidas nela e inserirá os links diretos na coluna de Foto da sua planilha.
+                  <strong>Implante como App da Web:</strong>
+                  <ul className="list-disc list-inside mt-1 space-y-0.5 text-zinc-600 text-[11px]">
+                    <li>Clique em <strong>Salvar</strong> (ícone de disquete).</li>
+                    <li>Clique no botão azul <strong>Implantar &gt; Nova implantação</strong> (ou Gerenciar implantações &gt; Editar &gt; Nova versão).</li>
+                    <li>Selecione o tipo <strong>App da Web</strong> (na engrenagem).</li>
+                    <li>
+                      Em <em>Executar como</em>: escolha <strong>Eu</strong>.
+                    </li>
+                    <li>
+                      Em <em>Quem pode acessar</em>: escolha{' '}
+                      <strong className="text-emerald-800">Qualquer pessoa (Anyone)</strong>.
+                    </li>
+                    <li>Clique em <strong>Implantar</strong> e copie a "URL do app da Web" (terminada em <code>/exec</code>).</li>
+                  </ul>
+                </div>
+              </li>
+
+              <li className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-700 text-white font-black flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                  5
+                </span>
+                <div>
+                  <strong>Cole a URL no campo acima!</strong>
+                  Pronto: todas as fotos serão salvas automaticamente na pasta <strong>AgroGestao_Documentos</strong> do seu Google Drive e na planilha ficará <strong>exclusivamente o link direto</strong> do arquivo.
                 </div>
               </li>
             </ol>

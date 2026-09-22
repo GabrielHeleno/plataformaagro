@@ -20,6 +20,7 @@ import {
   DollarSign,
   ChevronRight,
   MessageCircle,
+  Cloud,
 } from 'lucide-react';
 import { ProdutorRural, SolicitacaoServico, StatusServico } from '../types';
 import {
@@ -32,7 +33,7 @@ import {
   LISTA_STATUS,
 } from '../utils/storage';
 import { getDocumentFile } from '../utils/documentStorage';
-import { formatDriveDirectImageUrl, isPdfDocument } from '../utils/driveStorage';
+import { formatDriveDirectImageUrl, isPdfDocument, isGoogleDriveUrl } from '../utils/driveStorage';
 
 interface ProducerDetailModalProps {
   produtor: ProdutorRural;
@@ -442,9 +443,33 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
                   </div>
                 </div>
 
-                <div className="mt-3 text-[11px] text-zinc-500 text-center">
-                  RG / CNH oficial do produtor
-                </div>
+                {resolvedFotoUrl && isGoogleDriveUrl(resolvedFotoUrl) ? (
+                  <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded-lg space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-bold text-blue-900 flex items-center gap-1">
+                        <Cloud className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Salvo no Google Drive</span>
+                      </span>
+                      <a
+                        href={resolvedFotoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-700 hover:text-blue-900 font-bold flex items-center gap-0.5 hover:underline"
+                        title="Abrir no Google Drive"
+                      >
+                        <span>Abrir Link</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                    <span className="text-[10px] text-blue-700 block truncate font-mono bg-white/80 px-1.5 py-0.5 rounded border border-blue-100" title={resolvedFotoUrl}>
+                      {resolvedFotoUrl}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-3 text-[11px] text-zinc-500 text-center">
+                    RG / CNH oficial do produtor
+                  </div>
+                )}
               </div>
             </div>
           </div>
