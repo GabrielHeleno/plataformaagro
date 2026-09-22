@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   ExternalLink,
   Cloud,
+  Map as MapIcon,
 } from 'lucide-react';
 import { ProdutorRural } from '../types';
 import { formatarCPF, formatarTelefone } from '../utils/storage';
@@ -29,6 +30,7 @@ import {
   getDriveWebLink,
 } from '../utils/driveStorage';
 import { DocumentImage } from './DocumentImage';
+import { LocationPickerMap } from './LocationPickerMap';
 
 interface ProducerFormModalProps {
   produtorInicial?: ProdutorRural | null;
@@ -58,6 +60,7 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
     produtorInicial?.enderecoPropriedade || ''
   );
   const [geolocalizacao, setGeolocalizacao] = useState<string>(produtorInicial?.geolocalizacao || '');
+  const [mapaAberto, setMapaAberto] = useState<boolean>(false);
   const [telefone, setTelefone] = useState<string>(produtorInicial?.telefone || '');
   const [observacoes, setObservacoes] = useState<string>(produtorInicial?.observacoes || '');
   const [areaCultivada, setAreaCultivada] = useState<string>(
@@ -529,32 +532,62 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
 
           {/* Linha 5: Geolocalização e Área Cultivada */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <div className="flex items-center justify-between mb-1">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between flex-wrap gap-1">
                 <label className="font-bold text-zinc-700 flex items-center gap-1">
                   <Navigation className="w-3.5 h-3.5 text-emerald-700" />
                   <span>Geolocalização da Propriedade</span>
                 </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMapaAberto(true)}
+                    className="px-2.5 py-1 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-md shadow-xs flex items-center gap-1.5 transition-all active:scale-95"
+                    title="Abrir mapa com imagem de satélite para marcar o pin da fazenda"
+                  >
+                    <MapIcon className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>Marcar no Mapa (Pin)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGetGPS}
+                    disabled={obtendoGPS}
+                    className="text-[11px] font-bold text-emerald-700 hover:underline flex items-center gap-1"
+                    title="Obter coordenadas GPS atuais do seu dispositivo"
+                  >
+                    <MapPin className="w-3 h-3" />
+                    <span>{obtendoGPS ? 'Obtendo...' : 'GPS Atual'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={geolocalizacao}
+                  onChange={(e) => setGeolocalizacao(e.target.value)}
+                  placeholder="Ex: -20.903100, -43.363300 (Cipotânea) ou link do Maps"
+                  className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg font-mono text-xs sm:text-sm text-zinc-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
                 <button
                   type="button"
-                  onClick={handleGetGPS}
-                  disabled={obtendoGPS}
-                  className="text-[11px] font-bold text-emerald-700 hover:underline flex items-center gap-1"
+                  onClick={() => setMapaAberto(true)}
+                  className="px-2.5 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg text-xs font-bold text-emerald-800 flex items-center gap-1 shrink-0 transition-colors"
+                  title="Abrir mapa interativo"
                 >
-                  <MapPin className="w-3 h-3" />
-                  <span>{obtendoGPS ? 'Obtendo GPS...' : 'Capturar GPS Atual'}</span>
+                  <MapIcon className="w-3.5 h-3.5 text-emerald-700" />
+                  <span className="hidden sm:inline">Ver no Mapa</span>
                 </button>
               </div>
-              <input
-                type="text"
-                value={geolocalizacao}
-                onChange={(e) => setGeolocalizacao(e.target.value)}
-                placeholder="Ex: -18.5789, -46.5180 ou link do Maps"
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg font-mono text-zinc-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-              />
-              <span className="text-[10px] text-zinc-400 mt-0.5 block">
-                Insira coordenadas (Latitude, Longitude) ou link direto do Google Maps.
-              </span>
+
+              <div className="flex items-center justify-between text-[10px] text-zinc-500 px-0.5">
+                <span>Adicione o pin no mapa, use o GPS ou digite as coordenadas manualmente.</span>
+                {geolocalizacao && (
+                  <span className="text-emerald-700 font-semibold font-mono">
+                    ✓ Coordenadas definidas
+                  </span>
+                )}
+              </div>
             </div>
 
             <div>
@@ -615,6 +648,29 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Modal Sobreposto do Mapa com Pin (Satélite / Ruas / Busca / GPS) */}
+      {mapaAberto && (
+        <div
+          className="fixed inset-0 z-70 bg-zinc-950/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150"
+          onClick={() => setMapaAberto(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl border border-zinc-300 w-full max-w-4xl overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <LocationPickerMap
+              initialCoordinates={geolocalizacao}
+              onConfirm={(coords) => {
+                setGeolocalizacao(coords);
+                setMapaAberto(false);
+              }}
+              onCancel={() => setMapaAberto(false)}
+              isModal={true}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
