@@ -110,25 +110,36 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
             ? `PDF pronto (${sizeKb} KB). Salvando no Google Drive...`
             : `Comprimido: ${sizeKb} KB (original ${originalSizeKb} KB). Salvando no Google Drive...`
         );
-        const driveResult = await uploadDocumentToGoogleDrive(sheetsUrl, dataUrl, fileName, nomeCompleto);
+        const targetId = id.trim() || produtorInicial?.id || proximoIdSugerido;
+        const driveResult = await uploadDocumentToGoogleDrive(
+          sheetsUrl,
+          dataUrl,
+          fileName,
+          nomeCompleto,
+          targetId
+        );
         
         if (driveResult.success && driveResult.directUrl) {
           setDocumentoFotoUrl(driveResult.directUrl);
+          await saveDocumentFile(targetId, driveResult.directUrl);
           setInfoFoto(
             isPdf
-              ? `PDF salvo na pasta AgroGestao_Documentos do Google Drive. Link direto gerado para a planilha.`
-              : `Foto salva no Google Drive com sucesso! O link direto do arquivo será gravado na célula da planilha.`
+              ? `PDF salvo na pasta AgroGestao_Documentos do Google Drive! Link registrado para a célula da planilha.`
+              : `Foto salva no Google Drive com sucesso! O link direto do arquivo foi gravado na planilha.`
           );
         } else {
           // Fallback: se o script do Drive retornar erro ou não estiver atualizado, mantém no banco local
           setDocumentoFotoUrl(dataUrl);
+          await saveDocumentFile(targetId, dataUrl);
           setInfoFoto(
-            `Arquivo salvo no banco local (${sizeKb} KB). Atenção: no Google Apps Script, execute a função 'autorizarAcessoAoGoogleDrive' para permitir salvar direto no Drive.`
+            `Arquivo salvo no banco local (${sizeKb} KB). ${driveResult.error || 'Atenção: No Apps Script, execute autorizarAcessoAoGoogleDrive e crie uma Nova Versão da implantação.'}`
           );
         }
       } else {
         // Modo local (sem planilha conectada)
+        const targetId = id.trim() || produtorInicial?.id || proximoIdSugerido;
         setDocumentoFotoUrl(dataUrl);
+        await saveDocumentFile(targetId, dataUrl);
         setInfoFoto(
           isPdf
             ? `Documento PDF salvo localmente (${sizeKb} KB). Conecte a planilha para enviar à pasta do Google Drive.`
@@ -210,7 +221,7 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
     };
 
     // Sincroniza persistência dedicada do documento no IndexedDB
-    if (documentoFotoUrl && documentoFotoUrl.startsWith('data:')) {
+    if (documentoFotoUrl) {
       saveDocumentFile(produtorSalvar.id, documentoFotoUrl);
     } else if (!documentoFotoUrl && isEditing && produtorInicial?.id) {
       removeDocumentFile(produtorInicial.id);

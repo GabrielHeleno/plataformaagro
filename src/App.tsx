@@ -34,7 +34,7 @@ import {
   PermissionStatus,
   dispararLembreteDiario,
 } from './utils/notifications';
-import { getDocumentFile } from './utils/documentStorage';
+import { getDocumentFile, saveDocumentFile } from './utils/documentStorage';
 import { AlertTriangle, Bell, RotateCcw, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
@@ -152,6 +152,13 @@ export default function App() {
         if (res.produtores && res.produtores.length > 0) {
           const prodsCompletos = await Promise.all(
             res.produtores.map(async (novoP) => {
+              // Se a planilha já traz o link oficial do Google Drive (http/https), prioriza o link da nuvem
+              if (novoP.documentoFotoUrl && novoP.documentoFotoUrl.startsWith('http')) {
+                await saveDocumentFile(novoP.id, novoP.documentoFotoUrl);
+                return novoP;
+              }
+
+              // Se a planilha veio sem foto ou com marcador, verifica se temos foto local preservada
               const localP = produtores.find((p) => p.id === novoP.id);
               if (
                 localP &&
@@ -161,17 +168,13 @@ export default function App() {
               ) {
                 return { ...novoP, documentoFotoUrl: localP.documentoFotoUrl };
               }
-              // Se a planilha retornou com marcador local ou sem foto, busca no repositório persistente IndexedDB
-              if (
-                !novoP.documentoFotoUrl ||
-                novoP.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]' ||
-                novoP.documentoFotoUrl.startsWith('idb:')
-              ) {
-                const fotoLocal = await getDocumentFile(novoP.id);
-                if (fotoLocal) {
-                  return { ...novoP, documentoFotoUrl: fotoLocal };
-                }
+
+              // Busca no repositório persistente IndexedDB
+              const fotoLocal = await getDocumentFile(novoP.id);
+              if (fotoLocal) {
+                return { ...novoP, documentoFotoUrl: fotoLocal };
               }
+
               return novoP;
             })
           );

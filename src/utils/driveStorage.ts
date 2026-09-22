@@ -80,13 +80,80 @@ export function formatDriveDirectImageUrl(rawUrl: string): string {
 }
 
 /**
- * Envia uma imagem ou PDF para o Google Drive através do WebApp do Apps Script
+ * Testa se o Web App do Google Apps Script está com acesso e autorização válidos ao Google Drive.
+ */
+export async function testDriveConnection(webappUrl: string): Promise<{
+  success: boolean;
+  driveAuthorized: boolean;
+  folderName?: string;
+  folderUrl?: string;
+  message: string;
+}> {
+  if (!webappUrl || !webappUrl.startsWith('http')) {
+    return {
+      success: false,
+      driveAuthorized: false,
+      message: 'URL da planilha não configurada ou inválida.',
+    };
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 9000);
+
+    const testUrl = `${webappUrl}${webappUrl.includes('?') ? '&' : '?'}action=testDrive&_t=${Date.now()}`;
+    const response = await fetch(testUrl, {
+      method: 'GET',
+      mode: 'cors',
+      redirect: 'follow',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Servidor retornou status HTTP ${response.status}`);
+    }
+
+    const resJson = await response.json();
+    if (resJson.status === 'success' && resJson.driveAuthorized) {
+      return {
+        success: true,
+        driveAuthorized: true,
+        folderName: resJson.folderName,
+        folderUrl: resJson.folderUrl,
+        message: resJson.message || 'Google Drive conectado e autorizado com sucesso!',
+      };
+    } else {
+      return {
+        success: false,
+        driveAuthorized: false,
+        message:
+          resJson.message ||
+          'O Google Drive não está autorizado. É necessário executar a função autorizarAcessoAoGoogleDrive no Apps Script.',
+      };
+    }
+  } catch (err: any) {
+    // Se o GET testDrive não for reconhecido (ex: script antigo sem action=testDrive)
+    return {
+      success: false,
+      driveAuthorized: false,
+      message:
+        'Não foi possível validar o Google Drive. Verifique se copiou a versão mais recente do código e criou uma Nova Versão em "Implantar > Gerenciar Implantações".',
+    };
+  }
+}
+
+/**
+ * Envia uma imagem ou PDF para o Google Drive através do WebApp do Apps Script.
+ * Se produtorId for informado, o Apps Script também grava o link diretamente na linha do produtor na planilha.
  */
 export async function uploadDocumentToGoogleDrive(
   webappUrl: string,
   base64DataUrl: string,
   fileName: string,
-  produtorNome?: string
+  produtorNome?: string,
+  produtorId?: string
 ): Promise<DriveUploadResult> {
   if (!webappUrl || !webappUrl.startsWith('http')) {
     return {
@@ -100,9 +167,13 @@ export async function uploadDocumentToGoogleDrive(
       action: 'uploadDocument',
       fileName: fileName || `documento_${Date.now()}.jpg`,
       fileData: base64DataUrl,
+      produtorId: produtorId || '',
       produtorNome: produtorNome || 'Produtor',
       timestamp: new Date().toISOString(),
     };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     const response = await fetch(webappUrl, {
       method: 'POST',
@@ -112,7 +183,9 @@ export async function uploadDocumentToGoogleDrive(
         'Content-Type': 'text/plain',
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`Erro na resposta do servidor: HTTP ${response.status}`);
@@ -130,7 +203,9 @@ export async function uploadDocumentToGoogleDrive(
     } else {
       return {
         success: false,
-        error: resJson.message || 'O script do Google Drive retornou um erro.',
+        error:
+          resJson.message ||
+          'Falha ao gravar no Google Drive. Execute "autorizarAcessoAoGoogleDrive" no Apps Script e gere uma Nova Versão da implantação.',
       };
     }
   } catch (err: any) {
@@ -139,7 +214,7 @@ export async function uploadDocumentToGoogleDrive(
       success: false,
       error:
         err.message ||
-        'Falha ao enviar arquivo para o Google Drive. Verifique se autorizou o script no Google Apps Script.',
+        'Falha de comunicação com o Google Drive. Verifique a autorização do script.',
     };
   }
 }
@@ -198,7 +273,13 @@ export async function sincronizarFotosComGoogleDrive(
     const safeNome = item.produtor.nomeCompleto.replace(/[^a-zA-Z0-9]/g, '_');
     const fileName = `doc_${safeNome}_${item.produtor.id}.${ext}`;
 
-    const res = await uploadDocumentToGoogleDrive(webappUrl, item.base64, fileName, item.produtor.nomeCompleto);
+    const res = await uploadDocumentToGoogleDrive(
+      webappUrl,
+      item.base64,
+      fileName,
+      item.produtor.nomeCompleto,
+      item.produtor.id
+    );
 
     if (res.success && res.directUrl) {
       // Atualiza o produtor com a URL real do Google Drive!

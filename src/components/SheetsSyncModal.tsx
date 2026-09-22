@@ -26,7 +26,7 @@ import {
   fetchFromGoogleSheets,
   sendToGoogleSheets,
 } from '../utils/sheetsSync';
-import { sincronizarFotosComGoogleDrive } from '../utils/driveStorage';
+import { sincronizarFotosComGoogleDrive, testDriveConnection } from '../utils/driveStorage';
 import { ProdutorRural, SolicitacaoServico } from '../types';
 
 interface SheetsSyncModalProps {
@@ -59,6 +59,13 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
   const [autoSync, setAutoSync] = useState(getStoredAutoSync());
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(getStoredLastSync());
   const [showScriptViewer, setShowScriptViewer] = useState(false);
+  const [isTestingDrive, setIsTestingDrive] = useState(false);
+  const [driveStatus, setDriveStatus] = useState<{
+    tested: boolean;
+    success: boolean;
+    folderName?: string;
+    message: string;
+  } | null>(null);
 
   if (!isOpen) return null;
 
@@ -211,7 +218,12 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
         await sendToGoogleSheets(sheetsUrl, driveRes.produtoresAtualizados, servicos);
         setStatusMessage({
           type: 'success',
-          text: `Sucesso! ${driveRes.fotosEnviadas} foto(s) foram enviadas para a pasta do Google Drive e a planilha foi preenchida com os links!`,
+          text: `Sucesso! ${driveRes.fotosEnviadas} foto(s) foram enviadas para o Google Drive e as células da planilha foram preenchidas com os links!`,
+        });
+      } else if (driveRes.erros && driveRes.erros.length > 0) {
+        setStatusMessage({
+          type: 'error',
+          text: `Não foi possível salvar no Google Drive: ${driveRes.erros[0]}. Certifique-se de executar "autorizarAcessoAoGoogleDrive" no Apps Script e criar uma Nova Versão da implantação.`,
         });
       } else {
         setStatusMessage({
@@ -227,6 +239,46 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
     } finally {
       setIsSyncing(false);
       setPhotoProgress('');
+    }
+  };
+
+  const handleTestDrive = async () => {
+    const targetUrl = sheetsUrl || urlInput.trim();
+    if (!targetUrl) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Insira a URL do Web App acima para testar o Google Drive.',
+      });
+      return;
+    }
+    setIsTestingDrive(true);
+    try {
+      const res = await testDriveConnection(targetUrl);
+      setDriveStatus({
+        tested: true,
+        success: res.success,
+        folderName: res.folderName,
+        message: res.message,
+      });
+      if (res.success) {
+        setStatusMessage({
+          type: 'success',
+          text: `Google Drive 100% Conectado! Pasta '${res.folderName || 'AgroGestao_Documentos'}' autorizada e pronta para receber fotos e gravar os links nas células.`,
+        });
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: res.message,
+        });
+      }
+    } catch (err: any) {
+      setDriveStatus({
+        tested: true,
+        success: false,
+        message: err.message || 'Falha ao testar permissão do Google Drive.',
+      });
+    } finally {
+      setIsTestingDrive(false);
     }
   };
 
@@ -345,6 +397,15 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
               {sheetsUrl && (
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={handleTestDrive}
+                    disabled={isTestingDrive || isSyncing}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-semibold rounded-lg border border-blue-200 shadow-xs transition-all disabled:opacity-50"
+                    title="Verifica se o Google Drive está autorizado a salvar fotos"
+                  >
+                    <Cloud className={`w-3.5 h-3.5 text-blue-600 ${isTestingDrive ? 'animate-bounce' : ''}`} />
+                    <span>{isTestingDrive ? 'Testando...' : 'Testar Drive'}</span>
+                  </button>
+                  <button
                     onClick={handleManualFetch}
                     disabled={isSyncing}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-zinc-100 text-zinc-800 text-xs font-semibold rounded-lg border border-zinc-300 shadow-xs transition-all disabled:opacity-50"
@@ -363,6 +424,40 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Resultado do Teste do Drive quando acionado */}
+            {driveStatus?.tested && (
+              <div
+                className={`mt-3 p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                  driveStatus.success
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                    : 'bg-amber-50 border-amber-300 text-amber-950'
+                }`}
+              >
+                {driveStatus.success ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1 space-y-1">
+                  <div className="font-bold">
+                    {driveStatus.success
+                      ? `Google Drive 100% Ativo e Autorizado!`
+                      : 'Atenção: Google Drive precisa de autorização ou atualização de versão'}
+                  </div>
+                  <p className="text-[11px] leading-relaxed">
+                    {driveStatus.message}
+                  </p>
+                  {!driveStatus.success && (
+                    <div className="mt-2 p-2 bg-white/70 rounded-lg border border-amber-200 text-[11px] space-y-1">
+                      <div className="font-semibold text-amber-900">Como resolver em 1 minuto:</div>
+                      <div>1. No Apps Script, selecione a função <strong>autorizarAcessoAoGoogleDrive</strong> e clique em <strong>Executar (▶)</strong>.</div>
+                      <div>2. Clique em <strong>Implantar &gt; Gerenciar implantações &gt; Editar (lápis)</strong>, selecione <strong>Versão: Nova versão</strong> e clique em <strong>Implantar</strong>.</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Ações quando conectado */}
             {sheetsUrl && (
