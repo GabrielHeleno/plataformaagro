@@ -652,11 +652,11 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
       {/* Modal Sobreposto do Mapa com Pin (Satélite / Ruas / Busca / GPS) */}
       {mapaAberto && (
         <div
-          className="fixed inset-0 z-70 bg-zinc-950/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-70 bg-zinc-950/80 backdrop-blur-xs flex items-center justify-center p-1 sm:p-4 animate-in fade-in duration-150"
           onClick={() => setMapaAberto(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl border border-zinc-300 w-full max-w-4xl overflow-hidden flex flex-col"
+            className="bg-white rounded-2xl shadow-2xl border border-zinc-300 w-full max-w-4xl h-[96dvh] max-h-[96dvh] sm:h-[640px] sm:max-h-[88vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <LocationPickerMap

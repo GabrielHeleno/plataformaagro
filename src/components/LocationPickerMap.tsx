@@ -173,12 +173,19 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
 
     mapInstanceRef.current = map;
 
+    const handleResize = () => {
+      map.invalidateSize();
+    };
+
+    window.addEventListener('resize', handleResize);
+
     const timer = setTimeout(() => {
       map.invalidateSize();
     }, 200);
 
     return () => {
       clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -267,7 +274,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
       },
       (err) => {
         setLocatingUser(false);
-        setSearchError('Não foi possível obter sua localização atual: ' + err.message);
+        setSearchError('Não foi possível obter localização: ' + err.message);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
@@ -322,10 +329,10 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
           }
         }
       } else {
-        setSearchError('Local não encontrado. Tente o nome de uma localidade ou comunidade.');
+        setSearchError('Local não encontrado. Tente o nome de uma comunidade ou bairro.');
       }
     } catch (err: any) {
-      setSearchError('Erro ao buscar endereço: ' + err.message);
+      setSearchError('Erro na busca: ' + err.message);
     } finally {
       setSearching(false);
     }
@@ -336,34 +343,36 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
     onConfirm(formatted);
   };
 
+  // Estilo do container com 100% de preenchimento e flex vertical estrito
   const containerStyle = isFullscreen
-    ? 'fixed inset-0 z-70 bg-zinc-900/90 flex flex-col p-2 sm:p-4'
+    ? 'fixed inset-0 z-70 bg-zinc-900 flex flex-col w-full h-full'
     : isModal
-    ? 'flex flex-col h-[540px] max-h-[85vh] w-full'
-    : 'flex flex-col h-[400px] w-full rounded-xl border border-zinc-300 overflow-hidden';
+    ? 'flex flex-col w-full h-full overflow-hidden'
+    : 'flex flex-col w-full h-[460px] rounded-xl border border-zinc-300 overflow-hidden';
 
   return (
     <div className={containerStyle}>
-      <div className="bg-zinc-900 text-white p-3 rounded-t-xl flex flex-col gap-2.5 shadow-md shrink-0">
+      {/* 1. TOPO: Cabeçalho Compacto e Responsivo */}
+      <div className="bg-zinc-900 text-white px-3 py-2 sm:p-3 flex flex-col gap-2 shadow-md shrink-0 z-10">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-700 flex items-center justify-center text-white shrink-0 shadow-xs">
-              <MapPin className="w-4 h-4" />
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-700 flex items-center justify-center text-white shrink-0 shadow-xs">
+              <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
-            <div>
-              <div className="font-bold text-sm leading-tight flex items-center gap-1.5 flex-wrap">
-                <span>Marcar Localização com Pin</span>
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-semibold">
+            <div className="min-w-0">
+              <div className="font-bold text-xs sm:text-sm leading-tight flex items-center gap-1.5 flex-wrap">
+                <span className="truncate">Marcar Localização com Pin</span>
+                <span className="text-[9px] sm:text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-semibold whitespace-nowrap">
                   Satélite HD • {DEFAULT_CITY_LABEL}
                 </span>
               </div>
-              <div className="text-[11px] text-zinc-400">
-                Imagens de alta resolução. Clique para espetar o pin ou arraste o marcador vermelho até a propriedade.
+              <div className="text-[10px] text-zinc-400 hidden sm:block">
+                Toque no mapa para posicionar ou arraste o pin vermelho até a fazenda.
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
               onClick={() => {
@@ -388,103 +397,106 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
           </div>
         </div>
 
-        {/* Barra de Ações: Busca + Seletor Satélite HD / Ruas + Botão Cipotânea + GPS */}
-        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+        {/* 2. Barra de Busca e Ações Rápidas */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5">
           {/* Campo de Busca */}
-          <form onSubmit={handleSearchAddress} className="flex-1 min-w-[190px] flex items-center gap-1">
+          <form onSubmit={handleSearchAddress} className="flex items-center gap-1 flex-1">
             <div className="relative flex-1">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar bairro, comunidade ou região..."
+                placeholder="Buscar comunidade, bairro ou estrada..."
                 className="w-full pl-8 pr-3 py-1.5 bg-zinc-800 text-white text-xs rounded-lg border border-zinc-700 focus:outline-none focus:border-emerald-500 placeholder-zinc-500"
               />
             </div>
             <button
               type="submit"
               disabled={searching}
-              className="px-2.5 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+              className="px-2.5 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 shrink-0"
             >
-              {searching ? 'Buscando...' : 'Buscar'}
+              {searching ? '...' : 'Buscar'}
             </button>
           </form>
 
-          {/* Alternador de Camadas: Satélite HD (Híbrido) / Satélite Puro / Ruas */}
-          <div className="flex items-center gap-1 bg-zinc-800 p-0.5 rounded-lg border border-zinc-700">
+          {/* Botões de Ação com rolagem suave no mobile se a tela for estreita */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar shrink-0">
+            {/* Alternador Satélite HD / Satélite / Ruas */}
+            <div className="flex items-center gap-0.5 bg-zinc-800 p-0.5 rounded-lg border border-zinc-700 shrink-0">
+              <button
+                type="button"
+                onClick={() => switchLayer('hybrid')}
+                className={`px-2 py-1 text-[11px] font-semibold rounded-md flex items-center gap-1 transition-all ${
+                  mapType === 'hybrid'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+                title="Satélite HD com nomes de estradas rurais"
+              >
+                <Layers className="w-3 h-3 text-emerald-300" />
+                <span>Satélite HD</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchLayer('satellite')}
+                className={`px-1.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
+                  mapType === 'satellite'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+                title="Satélite limpo"
+              >
+                <span>Limpo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchLayer('streets')}
+                className={`px-1.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
+                  mapType === 'streets'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <span>Ruas</span>
+              </button>
+            </div>
+
+            {/* Botão Atalho Cipotânea */}
             <button
               type="button"
-              onClick={() => switchLayer('hybrid')}
-              className={`px-2 py-1 text-xs font-semibold rounded-md flex items-center gap-1 transition-all ${
-                mapType === 'hybrid'
-                  ? 'bg-emerald-700 text-white shadow-xs'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-              title="Satélite em alta definição com nomes de estradas rurais e comunidades (Airbus/Google HD)"
+              onClick={handleGoToCipotanea}
+              className="flex items-center gap-1 px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 text-emerald-300 hover:text-white font-bold rounded-lg border border-emerald-700/60 transition-colors shadow-xs shrink-0 whitespace-nowrap"
+              title="Centralizar em Cipotânea - MG"
             >
-              <Layers className="w-3 h-3 text-emerald-300" />
-              <span>Satélite HD</span>
+              <Compass className="w-3 h-3 text-emerald-400" />
+              <span>Cipotânea</span>
             </button>
+
+            {/* Botão Meu GPS */}
             <button
               type="button"
-              onClick={() => switchLayer('satellite')}
-              className={`px-2 py-1 text-xs font-semibold rounded-md flex items-center gap-1 transition-all ${
-                mapType === 'satellite'
-                  ? 'bg-emerald-700 text-white shadow-xs'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-              title="Satélite puro sem sobreposições de nomes"
+              onClick={handleGetDeviceGPS}
+              disabled={locatingUser}
+              className="flex items-center gap-1 px-2 py-1 text-[11px] bg-emerald-800 hover:bg-emerald-700 text-white font-bold rounded-lg border border-emerald-600 transition-colors disabled:opacity-50 shrink-0 whitespace-nowrap"
+              title="Ir para meu GPS atual"
             >
-              <span>Satélite Puro</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => switchLayer('streets')}
-              className={`px-2 py-1 text-xs font-semibold rounded-md flex items-center gap-1 transition-all ${
-                mapType === 'streets'
-                  ? 'bg-emerald-700 text-white shadow-xs'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <span>Ruas</span>
+              <Navigation className={`w-3 h-3 ${locatingUser ? 'animate-spin' : ''}`} />
+              <span>{locatingUser ? '...' : 'Meu GPS'}</span>
             </button>
           </div>
-
-          {/* Botão de Atalho Rápido para Cipotânea - MG */}
-          <button
-            type="button"
-            onClick={handleGoToCipotanea}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-emerald-300 hover:text-white text-xs font-bold rounded-lg border border-emerald-700/60 transition-colors shadow-xs"
-            title="Voltar o mapa para o centro de Cipotânea - MG"
-          >
-            <Compass className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Cipotânea</span>
-          </button>
-
-          {/* Botão GPS Dispositivo */}
-          <button
-            type="button"
-            onClick={handleGetDeviceGPS}
-            disabled={locatingUser}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg border border-emerald-600 transition-colors disabled:opacity-50"
-            title="Posicionar no meu GPS atual"
-          >
-            <Navigation className={`w-3.5 h-3.5 ${locatingUser ? 'animate-spin' : ''}`} />
-            <span>{locatingUser ? 'Localizando...' : 'Meu GPS'}</span>
-          </button>
         </div>
 
         {searchError && (
-          <div className="text-[11px] text-amber-300 bg-amber-950/60 border border-amber-800 px-2 py-1 rounded flex items-center gap-1.5">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          <div className="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-800 px-2 py-1 rounded flex items-center gap-1.5">
+            <AlertCircle className="w-3 h-3 shrink-0" />
             <span>{searchError}</span>
           </div>
         )}
       </div>
 
-      {/* Área do Mapa Leaflet */}
-      <div className="relative flex-1 w-full min-h-[280px] bg-zinc-900">
+      {/* 2. MEIO: Área do Mapa Leaflet com flex-1 e min-h-0 estrito (NUNCA empurra o footer fora da tela) */}
+      <div className="relative flex-1 min-h-0 w-full bg-zinc-900 overflow-hidden">
         <div ref={mapContainerRef} className="w-full h-full" style={{ zIndex: 1 }} />
 
         {/* Botão flutuante para centralizar no Pin */}
@@ -492,32 +504,32 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
           <button
             type="button"
             onClick={handleCenterOnPin}
-            className="absolute top-3 right-3 z-10 p-2 bg-white/95 hover:bg-white text-zinc-800 rounded-lg shadow-md border border-zinc-200 transition-all flex items-center gap-1 text-xs font-bold"
+            className="absolute top-2.5 right-2.5 z-10 p-2 bg-white/95 hover:bg-white text-zinc-800 rounded-lg shadow-md border border-zinc-200 transition-all flex items-center gap-1 text-xs font-bold active:scale-95"
             title="Centralizar mapa no marcador"
           >
-            <Crosshair className="w-4 h-4 text-emerald-700" />
-            <span className="hidden sm:inline">Centralizar no Pin</span>
+            <Crosshair className="w-3.5 h-3.5 text-emerald-700" />
+            <span className="text-[11px]">Pin</span>
           </button>
         )}
 
         {/* Dica flutuante sobre arrastar */}
-        <div className="absolute bottom-2 left-2 z-10 bg-zinc-950/85 backdrop-blur-xs text-white text-[10px] px-2.5 py-1 rounded-md border border-white/10 flex items-center gap-1.5 pointer-events-none shadow-md">
-          <HelpCircle className="w-3 h-3 text-emerald-400" />
-          <span>Dica: clique em qualquer ponto do mapa ou arraste o pin vermelho</span>
+        <div className="absolute bottom-2 left-2 z-10 bg-zinc-950/85 backdrop-blur-xs text-white text-[9px] sm:text-[10px] px-2 py-1 rounded-md border border-white/10 flex items-center gap-1 pointer-events-none shadow-md">
+          <HelpCircle className="w-3 h-3 text-emerald-400 shrink-0" />
+          <span>Toque no mapa para posicionar ou arraste o pin</span>
         </div>
       </div>
 
-      {/* Barra Inferior com Coordenadas Atuais e Confirmação */}
-      <div className="bg-zinc-50 border-t border-zinc-200 p-3 rounded-b-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-3 h-3 rounded-full bg-emerald-600 animate-pulse shrink-0"></div>
-          <div>
-            <div className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider">
-              Coordenadas Selecionadas ({DEFAULT_CITY_LABEL}):
-            </div>
-            <div className="font-mono font-bold text-xs sm:text-sm text-zinc-900">
+      {/* 3. BASE: Barra Inferior FIXA com Coordenadas e Botões Visíveis SEMPRE */}
+      <div className="bg-white border-t border-zinc-200 p-2.5 sm:p-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 shadow-lg shrink-0 z-20">
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse shrink-0"></div>
+          <div className="min-w-0">
+            <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider block leading-none">
+              Coordenadas:
+            </span>
+            <span className="font-mono font-bold text-xs sm:text-sm text-zinc-900 block truncate">
               {formatCoordinates(selectedCoords.lat, selectedCoords.lng)}
-            </div>
+            </span>
           </div>
         </div>
 
@@ -526,7 +538,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
             <button
               type="button"
               onClick={onCancel}
-              className="flex-1 sm:flex-none px-3 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-200 rounded-lg transition-colors border border-zinc-300 bg-white"
+              className="flex-1 sm:flex-none px-3 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors border border-zinc-300 bg-white min-h-[38px] flex items-center justify-center active:bg-zinc-200"
             >
               Cancelar
             </button>
@@ -535,9 +547,9 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
           <button
             type="button"
             onClick={handleConfirmCoords}
-            className="flex-1 sm:flex-none px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-colors"
+            className="flex-2 sm:flex-none px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs sm:text-sm font-bold rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-colors min-h-[38px] active:bg-emerald-900"
           >
-            <Check className="w-4 h-4" />
+            <Check className="w-4 h-4 shrink-0" />
             <span>Confirmar Localização</span>
           </button>
         </div>
