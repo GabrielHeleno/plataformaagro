@@ -17,6 +17,7 @@ import {
   getStoredServicos,
   saveStoredServicos,
   loadFromIndexedDB,
+  buscarDadosParaRecuperacao,
   verificarPendenciaProdutor,
   resetToDefaults,
   getHojeStr,
@@ -33,6 +34,7 @@ import {
   PermissionStatus,
   dispararLembreteDiario,
 } from './utils/notifications';
+import { getDocumentFile } from './utils/documentStorage';
 import { AlertTriangle, Bell, RotateCcw, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
@@ -62,18 +64,31 @@ export default function App() {
   const [pushStatus, setPushStatus] = useState<PermissionStatus>(() => getNotificationPermission());
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [isStorageInitialized, setIsStorageInitialized] = useState<boolean>(false);
+  const [snapshotRecuperavelCount, setSnapshotRecuperavelCount] = useState<number | null>(null);
 
   // Inicialização assíncrona: recupera dados persistentes do IndexedDB primeiro (incluindo imagens completas)
   useEffect(() => {
     loadFromIndexedDB()
-      .then((idbData) => {
-        if (idbData) {
-          if (idbData.produtores && idbData.produtores.length > 0) {
-            setProdutores(idbData.produtores);
+      .then(async (idbData) => {
+        let prodsCarregados: ProdutorRural[] | undefined = idbData?.produtores;
+        let servsCarregados: SolicitacaoServico[] | undefined = idbData?.servicos;
+
+        // Se porventura a lista de produtores estiver vazia, tenta auto-recuperar do snapshot de segurança
+        if (!prodsCarregados || prodsCarregados.length === 0) {
+          const recuperados = await buscarDadosParaRecuperacao();
+          if (recuperados && recuperados.produtores.length > 0) {
+            prodsCarregados = recuperados.produtores;
+            if (!servsCarregados || servsCarregados.length === 0) {
+              servsCarregados = recuperados.servicos;
+            }
           }
-          if (idbData.servicos && idbData.servicos.length > 0) {
-            setServicos(idbData.servicos);
-          }
+        }
+
+        if (prodsCarregados && prodsCarregados.length > 0) {
+          setProdutores(prodsCarregados);
+        }
+        if (servsCarregados && servsCarregados.length > 0) {
+          setServicos(servsCarregados);
         }
       })
       .catch((err) => {
@@ -84,11 +99,33 @@ export default function App() {
       });
   }, []);
 
+  // Monitora se há snapshot disponível para recuperação caso a lista esteja vazia
+  useEffect(() => {
+    if (isStorageInitialized && produtores.length === 0) {
+      buscarDadosParaRecuperacao().then((res) => {
+        if (res && res.produtores.length > 0) {
+          setSnapshotRecuperavelCount(res.produtores.length);
+        } else {
+          setSnapshotRecuperavelCount(null);
+        }
+      });
+    } else {
+      setSnapshotRecuperavelCount(null);
+    }
+  }, [produtores.length, isStorageInitialized]);
+
   // Envio automático em segundo plano para o Google Sheets quando houver alterações locais
   const triggerSheetsPush = useCallback(
     async (novosProdutores: ProdutorRural[], novosServicos: SolicitacaoServico[]) => {
       const url = getStoredSheetsUrl();
       if (!url || !getStoredAutoSync()) return;
+
+      // Trava de integridade máxima: NUNCA envia lista vazia de produtores para a planilha
+      if (!novosProdutores || !Array.isArray(novosProdutores) || novosProdutores.length === 0) {
+        console.warn('Proteção de segurança: bloqueada tentativa de sincronizar lista vazia de produtores com o Sheets.');
+        return;
+      }
+
       try {
         setIsSheetsSyncing(true);
         await sendToGoogleSheets(url, novosProdutores, novosServicos);
@@ -109,29 +146,46 @@ export default function App() {
       try {
         setIsSheetsSyncing(true);
         const res = await fetchFromGoogleSheets(url);
-        if (res.produtores.length > 0 || res.servicos.length > 0) {
-          // Merge seguro: se a planilha tiver documento vazio ou indicador '[FOTO_ARMAZENADA_LOCAL]',
-          // PRESERVA a cópia local do documento em alta resolução para nunca perder fotos
-          setProdutores((prevProdutores) => {
-            return res.produtores.map((novoP) => {
-              const localP = prevProdutores.find((p) => p.id === novoP.id);
+
+        // Atualiza produtores SOMENTE se a planilha contiver produtores válidos
+        // Trava crítica: Se a planilha estiver vazia, JAMAIS apaga os produtores do app!
+        if (res.produtores && res.produtores.length > 0) {
+          const prodsCompletos = await Promise.all(
+            res.produtores.map(async (novoP) => {
+              const localP = produtores.find((p) => p.id === novoP.id);
               if (
                 localP &&
                 localP.documentoFotoUrl &&
-                (!novoP.documentoFotoUrl ||
-                  novoP.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]' ||
-                  novoP.documentoFotoUrl.startsWith('idb:'))
+                !localP.documentoFotoUrl.startsWith('idb:') &&
+                localP.documentoFotoUrl !== '[FOTO_ARMAZENADA_LOCAL]'
               ) {
                 return { ...novoP, documentoFotoUrl: localP.documentoFotoUrl };
               }
+              // Se a planilha retornou com marcador local ou sem foto, busca no repositório persistente IndexedDB
+              if (
+                !novoP.documentoFotoUrl ||
+                novoP.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]' ||
+                novoP.documentoFotoUrl.startsWith('idb:')
+              ) {
+                const fotoLocal = await getDocumentFile(novoP.id);
+                if (fotoLocal) {
+                  return { ...novoP, documentoFotoUrl: fotoLocal };
+                }
+              }
               return novoP;
-            });
-          });
+            })
+          );
+          setProdutores(prodsCompletos);
+        }
+
+        // Atualiza serviços se houver registros
+        if (res.servicos && res.servicos.length > 0) {
           setServicos(res.servicos);
-          if (!silent) {
-            setToastMsg('Dados atualizados da planilha do Google Sheets!');
-            setTimeout(() => setToastMsg(null), 3500);
-          }
+        }
+
+        if (!silent && (res.produtores.length > 0 || res.servicos.length > 0)) {
+          setToastMsg('Dados atualizados da planilha do Google Sheets!');
+          setTimeout(() => setToastMsg(null), 3500);
         }
       } catch (err: any) {
         if (!silent) {
@@ -258,18 +312,16 @@ export default function App() {
 
   // Handlers para Produtores
   const handleSaveProdutor = (salvo: ProdutorRural) => {
-    let prodsAtualizados: ProdutorRural[] = [];
-    setProdutores((prev) => {
-      const index = prev.findIndex((p) => p.id === salvo.id);
-      if (index >= 0) {
-        const copy = [...prev];
-        copy[index] = salvo;
-        prodsAtualizados = copy;
-        return copy;
-      }
-      prodsAtualizados = [salvo, ...prev];
-      return prodsAtualizados;
-    });
+    const index = produtores.findIndex((p) => p.id === salvo.id);
+    let prodsAtualizados: ProdutorRural[];
+    if (index >= 0) {
+      prodsAtualizados = [...produtores];
+      prodsAtualizados[index] = salvo;
+    } else {
+      prodsAtualizados = [salvo, ...produtores];
+    }
+
+    setProdutores(prodsAtualizados);
 
     // Se o produtor salvo estiver atualmente em visualização detalhada, atualiza ele
     if (selectedProdutor?.id === salvo.id) {
@@ -280,7 +332,7 @@ export default function App() {
     setEditingProdutor(null);
     mostrarToast(`Produtor "${salvo.nomeCompleto}" salvo com sucesso!`);
     
-    // Sincroniza com o Google Sheets se estiver conectado
+    // Sincroniza com o Google Sheets garantindo a lista calculada de forma síncrona
     triggerSheetsPush(prodsAtualizados, servicos);
   };
 
@@ -289,20 +341,39 @@ export default function App() {
     setProducerFormOpen(true);
   };
 
+  // Restauração de emergência a partir do Snapshot local de segurança
+  const handleRestaurarSnapshotProdutores = async () => {
+    try {
+      const recuperados = await buscarDadosParaRecuperacao();
+      if (recuperados && recuperados.produtores.length > 0) {
+        setProdutores(recuperados.produtores);
+        mostrarToast(`${recuperados.produtores.length} produtor(es) restaurados com sucesso!`);
+        // Sincroniza de volta para a planilha do Google Sheets repovoando a aba Produtores
+        const url = getStoredSheetsUrl();
+        if (url) {
+          await sendToGoogleSheets(url, recuperados.produtores, servicos);
+        }
+      } else {
+        mostrarToast('Nenhum snapshot de produtores encontrado neste navegador.');
+      }
+    } catch (err) {
+      console.error('Erro ao restaurar snapshot:', err);
+      mostrarToast('Falha ao restaurar snapshot de produtores.');
+    }
+  };
+
   // Handlers para Serviços
   const handleSaveServico = (salvo: SolicitacaoServico) => {
-    let servsAtualizados: SolicitacaoServico[] = [];
-    setServicos((prev) => {
-      const index = prev.findIndex((s) => s.id === salvo.id);
-      if (index >= 0) {
-        const copy = [...prev];
-        copy[index] = salvo;
-        servsAtualizados = copy;
-        return copy;
-      }
-      servsAtualizados = [salvo, ...prev];
-      return servsAtualizados;
-    });
+    const index = servicos.findIndex((s) => s.id === salvo.id);
+    let servsAtualizados: SolicitacaoServico[];
+    if (index >= 0) {
+      servsAtualizados = [...servicos];
+      servsAtualizados[index] = salvo;
+    } else {
+      servsAtualizados = [salvo, ...servicos];
+    }
+
+    setServicos(servsAtualizados);
 
     setServiceFormOpen(false);
     setEditingServico(null);
@@ -310,7 +381,7 @@ export default function App() {
     setServiceFormDataInicial(undefined);
     mostrarToast(`Solicitação de serviço ${salvo.id} salva com sucesso!`);
 
-    // Sincroniza com o Google Sheets se estiver conectado
+    // Sincroniza com o Google Sheets com a lista síncrona calculada
     triggerSheetsPush(produtores, servsAtualizados);
   };
 
@@ -333,25 +404,23 @@ export default function App() {
     novoStatus: StatusServico,
     extras?: { tempoServico?: string; valor?: number; dataConclusao?: string }
   ) => {
-    let servsAtualizados: SolicitacaoServico[] = [];
-    setServicos((prev) => {
-      const updated = prev.map((s) => {
-        if (s.id === servicoId) {
-          return {
-            ...s,
-            status: novoStatus,
-            tempoServico: extras?.tempoServico !== undefined ? extras.tempoServico : s.tempoServico,
-            valor: extras?.valor !== undefined ? extras.valor : s.valor,
-            dataConclusao:
-              extras?.dataConclusao ||
-              (novoStatus === 'realizada' ? (s.dataConclusao || s.dataPrevista) : s.dataConclusao),
-          };
-        }
-        return s;
-      });
-      servsAtualizados = updated;
-      return updated;
+    const servsAtualizados = servicos.map((s) => {
+      if (s.id === servicoId) {
+        return {
+          ...s,
+          status: novoStatus,
+          tempoServico: extras?.tempoServico !== undefined ? extras.tempoServico : s.tempoServico,
+          valor: extras?.valor !== undefined ? extras.valor : s.valor,
+          dataConclusao:
+            extras?.dataConclusao ||
+            (novoStatus === 'realizada' ? (s.dataConclusao || s.dataPrevista) : s.dataConclusao),
+        };
+      }
+      return s;
     });
+
+    setServicos(servsAtualizados);
+
     setServiceDetailModalServico((curr) => {
       if (curr && curr.id === servicoId) {
         return {
@@ -368,20 +437,16 @@ export default function App() {
     });
     mostrarToast(`Status do serviço ${servicoId} atualizado para "${novoStatus}".`);
 
-    // Sincroniza com o Google Sheets se estiver conectado
+    // Sincroniza com o Google Sheets
     triggerSheetsPush(produtores, servsAtualizados);
   };
 
   const handleDeleteServico = (servicoId: string) => {
-    let servsAtualizados: SolicitacaoServico[] = [];
-    setServicos((prev) => {
-      const filtrados = prev.filter((s) => s.id !== servicoId);
-      servsAtualizados = filtrados;
-      return filtrados;
-    });
+    const servsAtualizados = servicos.filter((s) => s.id !== servicoId);
+    setServicos(servsAtualizados);
     mostrarToast(`Solicitação de serviço removida.`);
 
-    // Sincroniza com o Google Sheets se estiver conectado
+    // Sincroniza com o Google Sheets
     triggerSheetsPush(produtores, servsAtualizados);
   };
 
@@ -418,6 +483,44 @@ export default function App() {
         isSheetsSyncing={isSheetsSyncing}
         pushStatus={pushStatus}
       />
+
+      {/* Alerta de Recuperação de Emergência de Produtores */}
+      {produtores.length === 0 && (
+        <div className="bg-amber-50 border-b-2 border-amber-400 px-4 py-3 shadow-xs">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs sm:text-sm text-amber-900">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+              <div>
+                <p className="font-semibold text-amber-950">
+                  {snapshotRecuperavelCount && snapshotRecuperavelCount > 0
+                    ? `Atenção: A lista de produtores está vazia, mas encontramos ${snapshotRecuperavelCount} produtor(es) no backup de segurança local deste navegador!`
+                    : 'Atenção: A lista de produtores está temporariamente vazia.'}
+                </p>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  Seus serviços continuam salvos. Você pode restaurar os produtores imediatamente ou importar pelo histórico de versões do Google Sheets.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              {snapshotRecuperavelCount && snapshotRecuperavelCount > 0 && (
+                <button
+                  onClick={handleRestaurarSnapshotProdutores}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-sm text-xs transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Restaurar {snapshotRecuperavelCount} Produtor(es)
+                </button>
+              )}
+              <button
+                onClick={() => setBackupModalOpen(true)}
+                className="inline-flex items-center gap-1 text-xs text-amber-900 bg-amber-200/70 hover:bg-amber-200 font-semibold px-2.5 py-1.5 rounded-lg border border-amber-300 transition-colors"
+              >
+                Central de Backup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Alerta Global de Notificações ou Pendências */}
       {pendenciasCount > 0 && activeTab === 'calendario' && (

@@ -266,6 +266,17 @@ export async function sendToGoogleSheets(
     throw new Error('URL do Google Apps Script inválida ou não configurada.');
   }
 
+  // Proteção rigorosa contra payload vazio acidental:
+  // Se produtores estiver vazio, impede que 'saveAll' apague acidentalmente a planilha de produtores
+  if (!produtores || !Array.isArray(produtores) || produtores.length === 0) {
+    console.warn('Proteção de integridade ativada: tentativa de enviar lista vazia de produtores para a planilha bloqueada.');
+    return {
+      status: 'ignored',
+      message: 'Envio bloqueado por segurança: a lista de produtores estava vazia e poderia apagar a planilha.',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   // Otimização: para não estourar os limites de payload em planilhas,
   // mantemos fotos leves ou referências na planilha
   const produtoresParaEnvio = produtores.map((p) => ({
@@ -484,11 +495,11 @@ function doPost(e) {
     var pSheet = getOrCreateSheet(ss, "Produtores", getProdutoresHeaders());
     var sSheet = getOrCreateSheet(ss, "Servicos", getServicosHeaders());
     
-    if (data.produtores && Array.isArray(data.produtores)) {
+    if (data.produtores && Array.isArray(data.produtores) && data.produtores.length > 0) {
       writeProdutores(pSheet, data.produtores);
     }
     
-    if (data.servicos && Array.isArray(data.servicos)) {
+    if (data.servicos && Array.isArray(data.servicos) && data.servicos.length > 0) {
       writeServicos(sSheet, data.servicos);
     }
     
@@ -613,11 +624,13 @@ function readServicos(sheet) {
 }
 
 function writeProdutores(sheet, produtores) {
+  // Trava de segurança: impede que chamadas vazias ou acidentais limpem a planilha existente
+  if (!produtores || !Array.isArray(produtores) || produtores.length === 0) return;
+
   var lastRow = sheet.getLastRow();
   if (lastRow > 1) {
     sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
   }
-  if (!produtores || produtores.length === 0) return;
   
   var matrix = produtores.map(function(p) {
     return [
@@ -641,11 +654,13 @@ function writeProdutores(sheet, produtores) {
 }
 
 function writeServicos(sheet, servicos) {
+  // Trava de segurança: impede que chamadas vazias limpem a planilha existente
+  if (!servicos || !Array.isArray(servicos) || servicos.length === 0) return;
+
   var lastRow = sheet.getLastRow();
   if (lastRow > 1) {
     sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
   }
-  if (!servicos || servicos.length === 0) return;
   
   var matrix = servicos.map(function(s) {
     return [

@@ -195,7 +195,7 @@ export async function loadFromIndexedDB(): Promise<{
     if (idbProdutores && idbProdutores.length > 0) {
       const reidratados = await Promise.all(
         idbProdutores.map(async (p) => {
-          if (!p.documentoFotoUrl || p.documentoFotoUrl.startsWith('idb:')) {
+          if (!p.documentoFotoUrl || p.documentoFotoUrl.startsWith('idb:') || p.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]') {
             const fotoSalva = await getDocumentFile(p.id);
             if (fotoSalva) {
               return { ...p, documentoFotoUrl: fotoSalva };
@@ -235,18 +235,47 @@ export async function buscarDadosParaRecuperacao(): Promise<{
   origem: string;
 } | null> {
   try {
-    // 1. Tenta snapshot de segurança do IndexedDB
+    // 1. Tenta produtores_master no IndexedDB
+    const masterProds = await idbGet<ProdutorRural[]>('produtores_master');
+    const masterServs = await idbGet<SolicitacaoServico[]>('servicos_master');
+    if (masterProds && Array.isArray(masterProds) && masterProds.length > 0) {
+      const reidratados = await Promise.all(
+        masterProds.map(async (p) => {
+          if (!p.documentoFotoUrl || p.documentoFotoUrl.startsWith('idb:') || p.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]') {
+            const fotoSalva = await getDocumentFile(p.id);
+            if (fotoSalva) return { ...p, documentoFotoUrl: fotoSalva };
+          }
+          return p;
+        })
+      );
+      return {
+        produtores: reidratados,
+        servicos: masterServs || [],
+        origem: 'Base Master Segura (IndexedDB)',
+      };
+    }
+
+    // 2. Tenta snapshot de segurança do IndexedDB
     const snapshotProds = await idbGet<ProdutorRural[]>(PRODUTORES_SNAPSHOT_KEY);
     const snapshotServs = await idbGet<SolicitacaoServico[]>(SERVICOS_SNAPSHOT_KEY);
-    if (snapshotProds && snapshotProds.length > 0) {
+    if (snapshotProds && Array.isArray(snapshotProds) && snapshotProds.length > 0) {
+      const reidratados = await Promise.all(
+        snapshotProds.map(async (p) => {
+          if (!p.documentoFotoUrl || p.documentoFotoUrl.startsWith('idb:') || p.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]') {
+            const fotoSalva = await getDocumentFile(p.id);
+            if (fotoSalva) return { ...p, documentoFotoUrl: fotoSalva };
+          }
+          return p;
+        })
+      );
       return {
-        produtores: snapshotProds,
+        produtores: reidratados,
         servicos: snapshotServs || [],
         origem: 'Snapshot Automático de Segurança (IndexedDB)',
       };
     }
 
-    // 2. Tenta chaves legadas do localStorage
+    // 3. Tenta chaves legadas e persistentes do localStorage
     for (const key of PRODUTORES_FALLBACK_KEYS) {
       const data = localStorage.getItem(key);
       if (data) {

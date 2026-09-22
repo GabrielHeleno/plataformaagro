@@ -56,18 +56,26 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
   const [fotoModalAberta, setFotoModalAberta] = useState<boolean>(false);
   const [copiadoGeo, setCopiadoGeo] = useState<boolean>(false);
   const [filtroStatusHist, setFiltroStatusHist] = useState<string>('todos');
+  const temFotoDireta =
+    !!produtor.documentoFotoUrl &&
+    !produtor.documentoFotoUrl.startsWith('idb:') &&
+    produtor.documentoFotoUrl !== '[FOTO_ARMAZENADA_LOCAL]';
+
   const [resolvedFotoUrl, setResolvedFotoUrl] = useState<string>(
-    produtor.documentoFotoUrl && !produtor.documentoFotoUrl.startsWith('idb:')
-      ? formatDriveDirectImageUrl(produtor.documentoFotoUrl)
-      : ''
+    temFotoDireta ? formatDriveDirectImageUrl(produtor.documentoFotoUrl) : ''
   );
 
   useEffect(() => {
-    if (produtor.documentoFotoUrl && !produtor.documentoFotoUrl.startsWith('idb:')) {
+    if (
+      produtor.documentoFotoUrl &&
+      !produtor.documentoFotoUrl.startsWith('idb:') &&
+      produtor.documentoFotoUrl !== '[FOTO_ARMAZENADA_LOCAL]'
+    ) {
       setResolvedFotoUrl(formatDriveDirectImageUrl(produtor.documentoFotoUrl));
     } else {
       getDocumentFile(produtor.id).then((saved) => {
         if (saved) setResolvedFotoUrl(formatDriveDirectImageUrl(saved));
+        else setResolvedFotoUrl('');
       });
     }
   }, [produtor.id, produtor.documentoFotoUrl]);

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   X,
   Upload,
@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { ProdutorRural } from '../types';
 import { formatarCPF, formatarTelefone } from '../utils/storage';
-import { compressDocumentImage, validateDocumentFile } from '../utils/documentStorage';
+import { compressDocumentImage, validateDocumentFile, getDocumentFile, saveDocumentFile, removeDocumentFile } from '../utils/documentStorage';
 import { getStoredSheetsUrl } from '../utils/sheetsSync';
 import { uploadDocumentToGoogleDrive, formatDriveDirectImageUrl, isPdfDocument } from '../utils/driveStorage';
 
@@ -60,6 +60,20 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
   const [comprimindoFoto, setComprimindoFoto] = useState<boolean>(false);
   const [infoFoto, setInfoFoto] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Reidratação automática de documento existente ao editar
+  useEffect(() => {
+    if (produtorInicial?.id) {
+      const foto = produtorInicial.documentoFotoUrl;
+      if (!foto || foto.startsWith('idb:') || foto === '[FOTO_ARMAZENADA_LOCAL]') {
+        getDocumentFile(produtorInicial.id).then((saved) => {
+          if (saved) {
+            setDocumentoFotoUrl(saved);
+          }
+        });
+      }
+    }
+  }, [produtorInicial]);
 
   // Manipulação de Upload de Imagem de Documento com validação anti-corrupção, compressão e envio ao Google Drive
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,6 +204,13 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
       areaCultivada: parseFloat(areaCultivada) || 0,
       dataCadastro: produtorInicial?.dataCadastro || new Date().toISOString().split('T')[0],
     };
+
+    // Sincroniza persistência dedicada do documento no IndexedDB
+    if (documentoFotoUrl && documentoFotoUrl.startsWith('data:')) {
+      saveDocumentFile(produtorSalvar.id, documentoFotoUrl);
+    } else if (!documentoFotoUrl && isEditing && produtorInicial?.id) {
+      removeDocumentFile(produtorInicial.id);
+    }
 
     onSave(produtorSalvar);
   };

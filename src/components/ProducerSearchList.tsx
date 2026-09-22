@@ -15,7 +15,7 @@ import {
   DollarSign,
   FileSpreadsheet,
 } from 'lucide-react';
-import { ProdutorRural, SolicitacaoServico } from '../types';
+import { ProdutorRural, SolicitacaoServico, TIPOS_SERVICOS_DISPONIVEIS } from '../types';
 import {
   calcularEstatisticasProdutor,
   formatarTelefone,
@@ -41,21 +41,90 @@ export const ProducerSearchList: React.FC<ProducerSearchListProps> = ({
   termoInicial = '',
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>(termoInicial);
-  const [somentePendentes, setSomentePendentes] = useState<boolean>(false);
+  const [mostrarFiltrosAvancados, setMostrarFiltrosAvancados] = useState<boolean>(false);
 
-  // Filtragem inteligente por Nome, Apelido, CPF ou Telefone (com suporte a buscas parciais)
+  // Filtros Avançados
+  const [filtroPendencia, setFiltroPendencia] = useState<'todos' | 'com_pendencia' | 'sem_pendencia'>('todos');
+  const [filtroDataCadastro, setFiltroDataCadastro] = useState<'todos' | '7d' | '30d' | 'este_ano' | 'custom'>('todos');
+  const [dataInicioCustom, setDataInicioCustom] = useState<string>('');
+  const [dataFimCustom, setDataFimCustom] = useState<string>('');
+  const [filtroTipoServico, setFiltroTipoServico] = useState<string>('todos');
+
+  // Tipos de serviços únicos presentes na base + lista padrão
+  const tiposServicosOpcoes = useMemo(() => {
+    const tipos = new Set<string>();
+    TIPOS_SERVICOS_DISPONIVEIS.forEach((t) => tipos.add(t));
+    servicos.forEach((s) => {
+      if (s.tipoServico) tipos.add(s.tipoServico);
+    });
+    return Array.from(tipos).sort();
+  }, [servicos]);
+
+  // Contagem de filtros avançados ativos
+  const totalFiltrosAtivos = useMemo(() => {
+    let count = 0;
+    if (filtroPendencia !== 'todos') count++;
+    if (filtroDataCadastro !== 'todos') count++;
+    if (filtroTipoServico !== 'todos') count++;
+    return count;
+  }, [filtroPendencia, filtroDataCadastro, filtroTipoServico]);
+
+  const limparFiltrosAvancados = () => {
+    setFiltroPendencia('todos');
+    setFiltroDataCadastro('todos');
+    setDataInicioCustom('');
+    setDataFimCustom('');
+    setFiltroTipoServico('todos');
+  };
+
+  // Filtragem inteligente avançada
   const correspondencias = useMemo(() => {
     const rawSearch = searchTerm.trim();
     const termoNorm = normalizarTexto(rawSearch);
     const termoNumeros = rawSearch.replace(/\D/g, ''); // apenas dígitos para CPF ou Telefone
 
+    const hoje = new Date();
+    const dataLimite7d = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const dataLimite30d = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const anoAtual = hoje.getFullYear().toString();
+
     return produtores.filter((prod) => {
-      // Filtro de pendência se ativado
-      if (somentePendentes) {
-        const stats = calcularEstatisticasProdutor(prod.id, servicos);
-        if (!stats.temPendencia) return false;
+      // 1. Filtro por Status de Pendência
+      const stats = calcularEstatisticasProdutor(prod.id, servicos);
+      if (filtroPendencia === 'com_pendencia' && !stats.temPendencia) {
+        return false;
+      }
+      if (filtroPendencia === 'sem_pendencia' && stats.temPendencia) {
+        return false;
       }
 
+      // 2. Filtro por Data de Cadastro
+      const dataCad = prod.dataCadastro ? prod.dataCadastro.slice(0, 10) : '';
+      if (filtroDataCadastro === '7d') {
+        if (!dataCad || dataCad < dataLimite7d) return false;
+      } else if (filtroDataCadastro === '30d') {
+        if (!dataCad || dataCad < dataLimite30d) return false;
+      } else if (filtroDataCadastro === 'este_ano') {
+        if (!dataCad || !dataCad.startsWith(anoAtual)) return false;
+      } else if (filtroDataCadastro === 'custom') {
+        if (dataInicioCustom && (!dataCad || dataCad < dataInicioCustom)) return false;
+        if (dataFimCustom && (!dataCad || dataCad > dataFimCustom)) return false;
+      }
+
+      // 3. Filtro por Tipo de Serviço
+      if (filtroTipoServico !== 'todos') {
+        if (filtroTipoServico === '__sem_servicos__') {
+          const temServicos = servicos.some((s) => s.produtorId === prod.id);
+          if (temServicos) return false;
+        } else {
+          const temTipo = servicos.some(
+            (s) => s.produtorId === prod.id && s.tipoServico.toLowerCase() === filtroTipoServico.toLowerCase()
+          );
+          if (!temTipo) return false;
+        }
+      }
+
+      // 4. Termo de busca geral
       if (!rawSearch) return true;
 
       // Correspondência por Nome Completo
@@ -81,7 +150,16 @@ export const ProducerSearchList: React.FC<ProducerSearchListProps> = ({
 
       return matchNome || matchApelido || matchId || matchCPF || matchTelefone;
     });
-  }, [produtores, searchTerm, somentePendentes, servicos]);
+  }, [
+    produtores,
+    searchTerm,
+    filtroPendencia,
+    filtroDataCadastro,
+    dataInicioCustom,
+    dataFimCustom,
+    filtroTipoServico,
+    servicos,
+  ]);
 
   const totalPendentes = useMemo(() => {
     return produtores.filter((p) => {
@@ -164,25 +242,165 @@ export const ProducerSearchList: React.FC<ProducerSearchListProps> = ({
                 "{searchTerm}"
               </span>
             )}
+            {totalFiltrosAtivos > 0 && (
+              <span className="bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-full text-[11px]">
+                {totalFiltrosAtivos} filtro(s) ativo(s)
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setSomentePendentes(!somentePendentes)}
+              onClick={() => {
+                if (filtroPendencia === 'com_pendencia') {
+                  setFiltroPendencia('todos');
+                } else {
+                  setFiltroPendencia('com_pendencia');
+                }
+              }}
               className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg border font-medium text-xs transition-all ${
-                somentePendentes
+                filtroPendencia === 'com_pendencia'
                   ? 'bg-red-50 text-red-700 border-red-300 ring-2 ring-red-400 shadow-sm'
                   : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
               }`}
               title="Filtrar produtores com pendências financeiras"
             >
-              <AlertTriangle className={`w-3.5 h-3.5 ${somentePendentes ? 'text-red-600' : 'text-zinc-400'}`} />
+              <AlertTriangle className={`w-3.5 h-3.5 ${filtroPendencia === 'com_pendencia' ? 'text-red-600' : 'text-zinc-400'}`} />
               <span className="hidden sm:inline">Com Pendências</span>
               <span className="sm:hidden">Pendentes</span>
               <span className="font-bold">({totalPendentes})</span>
             </button>
+
+            <button
+              onClick={() => setMostrarFiltrosAvancados(!mostrarFiltrosAvancados)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                mostrarFiltrosAvancados || totalFiltrosAtivos > 0
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800 ring-2 ring-emerald-200 shadow-xs'
+                  : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+              }`}
+              title="Abrir filtros de busca avançada"
+            >
+              <Filter className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Filtros Avançados</span>
+              {totalFiltrosAtivos > 0 && (
+                <span className="bg-emerald-700 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                  {totalFiltrosAtivos}
+                </span>
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Painel Expansível de Filtros Avançados */}
+        {mostrarFiltrosAvancados && (
+          <div className="mt-4 pt-4 border-t border-zinc-200 bg-zinc-50/70 -mx-5 -mb-5 p-5 rounded-b-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-zinc-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-emerald-600" />
+                Refinar Resultados de Produtores
+              </span>
+              {totalFiltrosAtivos > 0 && (
+                <button
+                  onClick={limparFiltrosAvancados}
+                  className="text-xs text-red-600 hover:text-red-800 font-semibold hover:underline"
+                >
+                  Limpar todos os filtros ({totalFiltrosAtivos})
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* 1. Filtro de Status de Pendência */}
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                  Status de Pendência
+                </label>
+                <select
+                  value={filtroPendencia}
+                  onChange={(e) => setFiltroPendencia(e.target.value as any)}
+                  className="w-full text-xs bg-white border border-zinc-300 rounded-lg px-2.5 py-2 text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium"
+                >
+                  <option value="todos">Todos os produtores</option>
+                  <option value="com_pendencia">Somente com pendências financeiras</option>
+                  <option value="sem_pendencia">Somente regulares (sem pendências)</option>
+                </select>
+              </div>
+
+              {/* 2. Filtro de Data de Cadastro */}
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                  Data de Cadastro
+                </label>
+                <select
+                  value={filtroDataCadastro}
+                  onChange={(e) => setFiltroDataCadastro(e.target.value as any)}
+                  className="w-full text-xs bg-white border border-zinc-300 rounded-lg px-2.5 py-2 text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium"
+                >
+                  <option value="todos">Qualquer data de cadastro</option>
+                  <option value="7d">Últimos 7 dias</option>
+                  <option value="30d">Últimos 30 dias</option>
+                  <option value="este_ano">Cadastrados este ano</option>
+                  <option value="custom">Período personalizado...</option>
+                </select>
+              </div>
+
+              {/* 3. Filtro de Tipo de Serviço Solicitado */}
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                  Tipo de Serviço Solicitado
+                </label>
+                <select
+                  value={filtroTipoServico}
+                  onChange={(e) => setFiltroTipoServico(e.target.value)}
+                  className="w-full text-xs bg-white border border-zinc-300 rounded-lg px-2.5 py-2 text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium"
+                >
+                  <option value="todos">Qualquer tipo de serviço</option>
+                  <option value="__sem_servicos__">Sem nenhum serviço solicitado</option>
+                  {tiposServicosOpcoes.map((tipo) => (
+                    <option key={tipo} value={tipo}>
+                      Com serviço: {tipo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Inputs de Data Personalizada se selecionado */}
+            {filtroDataCadastro === 'custom' && (
+              <div className="flex flex-wrap items-center gap-3 pt-2 bg-white p-3 rounded-lg border border-zinc-200">
+                <div className="flex items-center gap-1.5 text-xs text-zinc-700">
+                  <span className="font-semibold">De:</span>
+                  <input
+                    type="date"
+                    value={dataInicioCustom}
+                    onChange={(e) => setDataInicioCustom(e.target.value)}
+                    className="text-xs border border-zinc-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-zinc-700">
+                  <span className="font-semibold">Até:</span>
+                  <input
+                    type="date"
+                    value={dataFimCustom}
+                    onChange={(e) => setDataFimCustom(e.target.value)}
+                    className="text-xs border border-zinc-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                {(dataInicioCustom || dataFimCustom) && (
+                  <button
+                    onClick={() => {
+                      setDataInicioCustom('');
+                      setDataFimCustom('');
+                    }}
+                    className="text-xs text-zinc-500 hover:text-zinc-700 underline ml-auto"
+                  >
+                    Limpar datas
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Lista de Correspondências */}
