@@ -1,4 +1,4 @@
-import { idbGet, idbSet } from './indexedDB';
+import { idbGet, idbSet, idbDelete } from './indexedDB';
 
 const DOC_PREFIX = 'doc_file_';
 
@@ -187,8 +187,11 @@ export async function compressDocumentImage(
  */
 export async function saveDocumentFile(produtorId: string, dataUrl: string): Promise<boolean> {
   if (!produtorId) return false;
+  if (!dataUrl || !dataUrl.trim()) {
+    return await removeDocumentFile(produtorId);
+  }
   try {
-    return await idbSet(`${DOC_PREFIX}${produtorId}`, dataUrl);
+    return await idbSet(`${DOC_PREFIX}${produtorId}`, dataUrl.trim());
   } catch (err) {
     console.warn(`Aviso ao salvar arquivo de documento do produtor ${produtorId}:`, err);
     return false;
@@ -201,7 +204,9 @@ export async function saveDocumentFile(produtorId: string, dataUrl: string): Pro
 export async function getDocumentFile(produtorId: string): Promise<string | null> {
   if (!produtorId) return null;
   try {
-    return await idbGet<string>(`${DOC_PREFIX}${produtorId}`);
+    const res = await idbGet<string>(`${DOC_PREFIX}${produtorId}`);
+    if (!res || !res.trim()) return null;
+    return res;
   } catch {
     return null;
   }
@@ -213,7 +218,7 @@ export async function getDocumentFile(produtorId: string): Promise<string | null
 export async function removeDocumentFile(produtorId: string): Promise<boolean> {
   if (!produtorId) return false;
   try {
-    return await idbSet(`${DOC_PREFIX}${produtorId}`, '');
+    return await idbDelete(`${DOC_PREFIX}${produtorId}`);
   } catch {
     return false;
   }

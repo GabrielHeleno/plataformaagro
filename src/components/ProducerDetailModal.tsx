@@ -21,6 +21,8 @@ import {
   ChevronRight,
   MessageCircle,
   Cloud,
+  Trash2,
+  Upload,
 } from 'lucide-react';
 import { ProdutorRural, SolicitacaoServico, StatusServico } from '../types';
 import {
@@ -47,6 +49,7 @@ interface ProducerDetailModalProps {
   servicos: SolicitacaoServico[];
   onClose: () => void;
   onEditProdutor: (produtor: ProdutorRural) => void;
+  onRemoveFoto?: (produtorId: string) => void;
   onAddServico: (produtorId: string) => void;
   onEditServico: (servico: SolicitacaoServico) => void;
   onUpdateServicoStatus: (servicoId: string, novoStatus: StatusServico) => void;
@@ -57,6 +60,7 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
   servicos,
   onClose,
   onEditProdutor,
+  onRemoveFoto,
   onAddServico,
   onEditServico,
   onUpdateServicoStatus,
@@ -64,6 +68,7 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
   const [fotoModalAberta, setFotoModalAberta] = useState<boolean>(false);
   const [copiadoGeo, setCopiadoGeo] = useState<boolean>(false);
   const [filtroStatusHist, setFiltroStatusHist] = useState<string>('todos');
+  const [confirmandoExclusaoFoto, setConfirmandoExclusaoFoto] = useState<boolean>(false);
   const temFotoDireta =
     !!produtor.documentoFotoUrl &&
     !produtor.documentoFotoUrl.startsWith('idb:') &&
@@ -80,11 +85,16 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
       produtor.documentoFotoUrl !== '[FOTO_ARMAZENADA_LOCAL]'
     ) {
       setResolvedFotoUrl(produtor.documentoFotoUrl);
-    } else {
+    } else if (
+      produtor.documentoFotoUrl &&
+      (produtor.documentoFotoUrl.startsWith('idb:') || produtor.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]')
+    ) {
       getDocumentFile(produtor.id).then((saved) => {
         if (saved) setResolvedFotoUrl(saved);
         else setResolvedFotoUrl('');
       });
+    } else {
+      setResolvedFotoUrl('');
     }
   }, [produtor.id, produtor.documentoFotoUrl]);
 
@@ -404,15 +414,51 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
                       <span>Cópia do Documento</span>
                     </span>
                     {resolvedFotoUrl && (
-                      <button
-                        onClick={() => setFotoModalAberta(true)}
-                        className="text-[11px] font-bold text-emerald-700 hover:underline flex items-center gap-0.5"
-                      >
-                        <Maximize2 className="w-3 h-3" />
-                        <span>{isPdfDocument(resolvedFotoUrl) ? 'Abrir PDF' : 'Ampliar'}</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setFotoModalAberta(true)}
+                          className="text-[11px] font-bold text-emerald-700 hover:underline flex items-center gap-0.5"
+                        >
+                          <Maximize2 className="w-3 h-3" />
+                          <span>{isPdfDocument(resolvedFotoUrl) ? 'Abrir PDF' : 'Ampliar'}</span>
+                        </button>
+                        {onRemoveFoto && (
+                          <button
+                            onClick={() => setConfirmandoExclusaoFoto(true)}
+                            className="text-[11px] font-bold text-red-600 hover:text-red-800 hover:underline flex items-center gap-0.5"
+                            title="Excluir cópia do documento deste produtor"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Excluir</span>
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
+
+                  {confirmandoExclusaoFoto && (
+                    <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded-lg text-xs space-y-1.5 animate-in fade-in">
+                      <p className="text-red-800 font-semibold">Excluir foto deste produtor?</p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            if (onRemoveFoto) onRemoveFoto(produtor.id);
+                            setResolvedFotoUrl('');
+                            setConfirmandoExclusaoFoto(false);
+                          }}
+                          className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold"
+                        >
+                          Sim, excluir
+                        </button>
+                        <button
+                          onClick={() => setConfirmandoExclusaoFoto(false)}
+                          className="px-2 py-1 bg-zinc-200 hover:bg-zinc-300 text-zinc-800 rounded text-[10px] font-bold"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <div
                     onClick={() => resolvedFotoUrl && setFotoModalAberta(true)}
@@ -441,9 +487,20 @@ export const ProducerDetailModal: React.FC<ProducerDetailModalProps> = ({
                         </>
                       )
                     ) : (
-                      <div className="text-center p-4 text-zinc-400">
-                        <FileText className="w-8 h-8 mx-auto mb-1" />
-                        <span className="text-xs">Nenhum documento anexado</span>
+                      <div className="text-center p-4 text-zinc-400 flex flex-col items-center justify-center">
+                        <FileText className="w-8 h-8 mx-auto mb-1 text-zinc-300" />
+                        <span className="text-xs text-zinc-500">Nenhum documento anexado</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditProdutor(produtor);
+                          }}
+                          className="mt-2 text-[10px] font-bold text-emerald-700 hover:underline flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                        >
+                          <Upload className="w-3 h-3" />
+                          <span>Adicionar Foto / PDF</span>
+                        </button>
                       </div>
                     )}
                   </div>

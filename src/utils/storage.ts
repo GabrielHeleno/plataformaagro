@@ -1,7 +1,7 @@
 import { ProdutorRural, SolicitacaoServico, StatusServico, EstatisticasProdutor } from '../types';
 import { PRODUTORES_INICIAIS, SERVICOS_INICIAIS } from '../data/initialData';
 import { idbGet, idbSet } from './indexedDB';
-import { saveDocumentFile, getDocumentFile } from './documentStorage';
+import { saveDocumentFile, getDocumentFile, removeDocumentFile } from './documentStorage';
 
 // Chaves principais e imutáveis para evitar qualquer perda em novas versões
 const PRODUTORES_MASTER_KEY = 'agro_produtores_rurais_master';
@@ -86,10 +86,12 @@ export function saveStoredProdutores(produtores: ProdutorRural[], isExplicitRese
   }
 
   try {
-    // 1. Salva cópias dos documentos pesados no repositório isolado e seguro do IndexedDB
+    // 1. Salva ou limpa cópias dos documentos no repositório isolado do IndexedDB
     for (const p of produtores) {
       if (p.documentoFotoUrl && p.documentoFotoUrl.startsWith('data:')) {
         saveDocumentFile(p.id, p.documentoFotoUrl);
+      } else if (!p.documentoFotoUrl || !p.documentoFotoUrl.trim()) {
+        removeDocumentFile(p.id);
       }
     }
 
@@ -103,7 +105,7 @@ export function saveStoredProdutores(produtores: ProdutorRural[], isExplicitRese
     try {
       const produtoresTextoPuro = produtores.map((p) => ({
         ...p,
-        // Se a foto tiver mais de 4000 caracteres, salva como ponteiro para IndexedDB
+        // Se a foto tiver mais de 4000 caracteres (ex: base64 grande), salva como ponteiro para IndexedDB
         documentoFotoUrl:
           p.documentoFotoUrl && p.documentoFotoUrl.length > 4000
             ? `idb:${p.id}`
@@ -115,7 +117,7 @@ export function saveStoredProdutores(produtores: ProdutorRural[], isExplicitRese
       try {
         const produtoresSemFoto = produtores.map((p) => ({
           ...p,
-          documentoFotoUrl: p.documentoFotoUrl ? `idb:${p.id}` : '',
+          documentoFotoUrl: p.documentoFotoUrl && p.documentoFotoUrl.startsWith('data:') ? `idb:${p.id}` : p.documentoFotoUrl || '',
         }));
         localStorage.setItem(PRODUTORES_MASTER_KEY, JSON.stringify(produtoresSemFoto));
       } catch (innerErr) {
@@ -191,15 +193,16 @@ export async function loadFromIndexedDB(): Promise<{
       idbProdutores = await idbGet<ProdutorRural[]>(PRODUTORES_SNAPSHOT_KEY);
     }
 
-    // Reidrata documentos que estejam armazenados no repositório isolado
+    // Reidrata documentos que estejam explicitamente armazenados no repositório isolado
     if (idbProdutores && idbProdutores.length > 0) {
       const reidratados = await Promise.all(
         idbProdutores.map(async (p) => {
-          if (!p.documentoFotoUrl || p.documentoFotoUrl.startsWith('idb:') || p.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]') {
+          if (p.documentoFotoUrl && (p.documentoFotoUrl.startsWith('idb:') || p.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]')) {
             const fotoSalva = await getDocumentFile(p.id);
             if (fotoSalva) {
               return { ...p, documentoFotoUrl: fotoSalva };
             }
+            return { ...p, documentoFotoUrl: '' };
           }
           return p;
         })
@@ -241,9 +244,10 @@ export async function buscarDadosParaRecuperacao(): Promise<{
     if (masterProds && Array.isArray(masterProds) && masterProds.length > 0) {
       const reidratados = await Promise.all(
         masterProds.map(async (p) => {
-          if (!p.documentoFotoUrl || p.documentoFotoUrl.startsWith('idb:') || p.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]') {
+          if (p.documentoFotoUrl && (p.documentoFotoUrl.startsWith('idb:') || p.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]')) {
             const fotoSalva = await getDocumentFile(p.id);
             if (fotoSalva) return { ...p, documentoFotoUrl: fotoSalva };
+            return { ...p, documentoFotoUrl: '' };
           }
           return p;
         })
@@ -261,9 +265,10 @@ export async function buscarDadosParaRecuperacao(): Promise<{
     if (snapshotProds && Array.isArray(snapshotProds) && snapshotProds.length > 0) {
       const reidratados = await Promise.all(
         snapshotProds.map(async (p) => {
-          if (!p.documentoFotoUrl || p.documentoFotoUrl.startsWith('idb:') || p.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]') {
+          if (p.documentoFotoUrl && (p.documentoFotoUrl.startsWith('idb:') || p.documentoFotoUrl === '[FOTO_ARMAZENADA_LOCAL]')) {
             const fotoSalva = await getDocumentFile(p.id);
             if (fotoSalva) return { ...p, documentoFotoUrl: fotoSalva };
+            return { ...p, documentoFotoUrl: '' };
           }
           return p;
         })

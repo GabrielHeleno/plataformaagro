@@ -77,12 +77,14 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
   useEffect(() => {
     if (produtorInicial?.id) {
       const foto = produtorInicial.documentoFotoUrl;
-      if (!foto || foto.startsWith('idb:') || foto === '[FOTO_ARMAZENADA_LOCAL]') {
+      if (foto && (foto.startsWith('idb:') || foto === '[FOTO_ARMAZENADA_LOCAL]')) {
         getDocumentFile(produtorInicial.id).then((saved) => {
           if (saved) {
             setDocumentoFotoUrl(saved);
           }
         });
+      } else {
+        setDocumentoFotoUrl(foto || '');
       }
     }
   }, [produtorInicial]);
@@ -395,7 +397,12 @@ export const ProducerFormModal: React.FC<ProducerFormModalProps> = ({
                     )}
                     <button
                       type="button"
-                      onClick={() => setDocumentoFotoUrl('')}
+                      onClick={() => {
+                        setDocumentoFotoUrl('');
+                        setInfoFoto('Anexo removido.');
+                        const targetId = id.trim() || produtorInicial?.id;
+                        if (targetId) removeDocumentFile(targetId);
+                      }}
                       className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors shadow"
                       title="Remover anexo"
                     >

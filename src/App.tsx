@@ -34,7 +34,7 @@ import {
   PermissionStatus,
   dispararLembreteDiario,
 } from './utils/notifications';
-import { getDocumentFile, saveDocumentFile } from './utils/documentStorage';
+import { getDocumentFile, saveDocumentFile, removeDocumentFile } from './utils/documentStorage';
 import { AlertTriangle, Bell, RotateCcw, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
@@ -152,30 +152,26 @@ export default function App() {
         if (res.produtores && res.produtores.length > 0) {
           const prodsCompletos = await Promise.all(
             res.produtores.map(async (novoP) => {
-              // Se a planilha já traz o link oficial do Google Drive (http/https), prioriza o link da nuvem
+              // 1. Se a planilha já traz o link oficial do Google Drive / Web (http/https), atualiza e salva
               if (novoP.documentoFotoUrl && novoP.documentoFotoUrl.startsWith('http')) {
                 await saveDocumentFile(novoP.id, novoP.documentoFotoUrl);
                 return novoP;
               }
 
-              // Se a planilha veio sem foto ou com marcador, verifica se temos foto local preservada
+              // 2. Se a planilha NÃO traz link (documentoFotoUrl vazio)
+              // Verifica se temos foto Base64 recém-anexada localmente que ainda não foi sincronizada
               const localP = produtores.find((p) => p.id === novoP.id);
               if (
                 localP &&
                 localP.documentoFotoUrl &&
-                !localP.documentoFotoUrl.startsWith('idb:') &&
-                localP.documentoFotoUrl !== '[FOTO_ARMAZENADA_LOCAL]'
+                localP.documentoFotoUrl.startsWith('data:')
               ) {
                 return { ...novoP, documentoFotoUrl: localP.documentoFotoUrl };
               }
 
-              // Busca no repositório persistente IndexedDB
-              const fotoLocal = await getDocumentFile(novoP.id);
-              if (fotoLocal) {
-                return { ...novoP, documentoFotoUrl: fotoLocal };
-              }
-
-              return novoP;
+              // 3. Se a foto foi removida do Google Drive/Sheets e não há Base64 pendente, limpa o repositório local
+              await removeDocumentFile(novoP.id);
+              return { ...novoP, documentoFotoUrl: '' };
             })
           );
           setProdutores(prodsCompletos);
@@ -342,6 +338,22 @@ export default function App() {
   const handleEditProdutor = (produtor: ProdutorRural) => {
     setEditingProdutor(produtor);
     setProducerFormOpen(true);
+  };
+
+  const handleRemoveFotoProdutor = async (produtorId: string) => {
+    await removeDocumentFile(produtorId);
+    const prodsAtualizados = produtores.map((p) => {
+      if (p.id === produtorId) {
+        return { ...p, documentoFotoUrl: '' };
+      }
+      return p;
+    });
+    setProdutores(prodsAtualizados);
+    if (selectedProdutor?.id === produtorId) {
+      setSelectedProdutor({ ...selectedProdutor, documentoFotoUrl: '' });
+    }
+    mostrarToast('Foto do documento removida com sucesso!');
+    triggerSheetsPush(prodsAtualizados, servicos);
   };
 
   // Restauração de emergência a partir do Snapshot local de segurança
@@ -628,6 +640,7 @@ export default function App() {
           onEditProdutor={(p) => {
             handleEditProdutor(p);
           }}
+          onRemoveFoto={handleRemoveFotoProdutor}
           onAddServico={(produtorId) => {
             handleOpenAddServico(produtorId);
           }}
