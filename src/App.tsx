@@ -640,7 +640,6 @@ export default function App() {
           onEditProdutor={(p) => {
             handleEditProdutor(p);
           }}
-          onRemoveFoto={handleRemoveFotoProdutor}
           onAddServico={(produtorId) => {
             handleOpenAddServico(produtorId);
           }}
